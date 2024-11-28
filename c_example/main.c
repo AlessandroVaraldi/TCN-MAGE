@@ -3,10 +3,10 @@
 #include <stdlib.h>
 
 int main() {
-    int num_layers = 3;        // Numero di layer nella rete
+    int num_layers = 8;        // Numero di layer nella rete
     int input_channels = 1;    // Canali di ingresso (ad es. unidimensionali per dati di vibrazione)
     int output_channels = 1;   // Canali di uscita (ad es. predizione della prossima vibrazione)
-    int sequence_length = 100; // Lunghezza della sequenza di input/output
+    int sequence_length = 1024; // Lunghezza della sequenza di input/output
 
     // Crea la sequenza di input e output (inizializzati a zero)
     double* input_sequence = (double*)calloc(sequence_length * input_channels, sizeof(double));
@@ -25,10 +25,15 @@ int main() {
     // Applicazione della rete TCN sull'input
     apply_tcn_network(&network, input_sequence, output_sequence);
 
-    // Stampa dell'output
-    printf("Output Sequence:\n");
+    // Stampa dell'output in output.txt
+    FILE* output_file = fopen("output.txt", "w");
+    if (output_file == NULL) {
+        fprintf(stderr, "Failed to open output file\n");
+        return EXIT_FAILURE;
+    }
+
     for (int i = 0; i < sequence_length; i++) {
-        printf("%f\n", output_sequence[i]);
+        fprintf(output_file, "%f\n", output_sequence[i]);
     }
 
     // Liberazione della memoria

@@ -18,6 +18,12 @@ void initialize_tcn_network(TCNNetwork* network, int num_layers, int input_chann
 
     int channels = input_channels;
     for (int i = 0; i < num_layers; i++) {
+        printf("Initializing layer %d\n", i);
+        printf("Input channels: %d\n", channels);
+        printf("Output channels: %d\n", (i == num_layers - 1) ? output_channels : channels * 2);
+        printf("Kernel size: 3\n");
+        printf("Dilation: %d\n", 1 << i);
+        printf("\n");
         int out_channels = (i == num_layers - 1) ? output_channels : channels * 2;
         initialize_tcn_layer(&network->layers[i], channels, out_channels, 3, 1 << i);
         channels = out_channels;
