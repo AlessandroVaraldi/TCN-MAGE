@@ -1,22 +1,28 @@
+// File: tcn_layer.h
+
 #ifndef TCN_LAYER_H
 #define TCN_LAYER_H
 
-#define L_TILE 1024   // Lunghezza del tile
-#define C_IN 1        // Numero di canali di input
-#define C_OUT 8       // Numero di canali di output
-#define K 64          // Lunghezza del kernel
-#define ACTIVATION_RELU 1
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
 
-// Funzioni del layer
-void causal_convolution_1d(
-    const float input[L_TILE + K - 1][C_IN], 
-    const float kernel[K][C_IN][C_OUT], 
-    float output[L_TILE][C_OUT], 
-    int dilation_rate);
+// Struttura per un singolo layer TCN
+typedef struct {
+    int c_in;       // Numero di canali di ingresso
+    int c_out;      // Numero di canali di uscita
+    int kernel_size; // Dimensione del kernel
+    int dilation;   // Distanza tra gli elementi del kernel
+    double* weights; // Pesi del layer (matrice c_out x (c_in * kernel_size))
+    double* biases;  // Bias per ogni canale di uscita
+} TCNLayer;
 
-void apply_activation(
-    float output[L_TILE][C_OUT], 
-    int activation_type);
+// Funzione per inizializzare un layer TCN
+void initialize_tcn_layer(TCNLayer* layer, int c_in, int c_out, int kernel_size, int dilation);
 
-#endif
+// Funzione per applicare il layer TCN a una sequenza di dati
+void apply_tcn_layer(TCNLayer* layer, double* input_sequence, double* output_sequence, int sequence_length);
+
+#endif // TCN_LAYER_H
+
 
