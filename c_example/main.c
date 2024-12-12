@@ -1,12 +1,23 @@
 #include "tcn_network.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+
+#define PI 3.14159265358979323846
+
+// Funzione per generare una sequenza deterministica, ad esempio una funzione sinusoidale
+void generate_deterministic_input(double* input_sequence, int sequence_length, int input_channels) {
+    for (int i = 0; i < sequence_length; i++) {
+        // Esempio di funzione sinusoidale come input deterministico
+        input_sequence[i] = sin(2 * PI * i / sequence_length);
+    }
+}
 
 int main() {
     int num_layers = 8;        // Numero di layer nella rete
     int input_channels = 1;    // Canali di ingresso (ad es. unidimensionali per dati di vibrazione)
     int output_channels = 1;   // Canali di uscita (ad es. predizione della prossima vibrazione)
-    int sequence_length = 1024; // Lunghezza della sequenza di input/output
+    int sequence_length = 16;  // Lunghezza della sequenza di input/output
 
     // Crea la sequenza di input e output (inizializzati a zero)
     double* input_sequence = (double*)calloc(sequence_length * input_channels, sizeof(double));
@@ -17,6 +28,9 @@ int main() {
         fprintf(stderr, "Failed to allocate memory for input or output sequences\n");
         return EXIT_FAILURE;
     }
+
+    // Genera un input deterministico usando una funzione sinusoidale
+    generate_deterministic_input(input_sequence, sequence_length, input_channels);
 
     // Inizializzazione della rete TCN
     TCNNetwork network;

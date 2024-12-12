@@ -51,18 +51,78 @@ void apply_tcn_layer(TCNLayer* layer, double* input_sequence, double* output_seq
 
     // Applica la convoluzione usando la sequenza con padding
     memset(output_sequence, 0, sequence_length * layer->c_out * sizeof(double));
+
     for (int i = 0; i < sequence_length; i++) {
+        /**
+        * Itera su ogni posizione della sequenza di input.
+        * Ad ogni iterazione, viene calcolato il valore convoluto
+        * per tutti i canali di output in corrispondenza della posizione `i`.
+        */
         for (int co = 0; co < layer->c_out; co++) {
-            double output = 0.0;
+            /**
+            * Itera sui canali di output (`co`).
+            * Ogni canale di output rappresenta un filtro convoluzionale
+            * indipendente applicato alla sequenza di input.
+            */
+            double output = 0.0; // Inizializza l'output convoluto per il canale `co`.
+
             for (int ki = 0; ki < layer->kernel_size; ki++) {
-                int input_index = i + ki * layer->dilation;  // Cambiato l'offset di input_index per considerare il padding
+                /**
+                * Itera sugli elementi del kernel convoluzionale (`ki`).
+                * Il kernel scorre la sequenza per calcolare una somma ponderata
+                * dei valori di input. Ogni posizione del kernel è associata
+                * a un sottoinsieme della sequenza originale (con padding incluso).
+                */
+                int input_index = i + ki * layer->dilation;
+                /**
+                * Calcola l'indice corretto nella sequenza di input, tenendo conto:
+                * - Della posizione `i` nella sequenza originale.
+                * - Dell'offset dato dalla posizione `ki` nel kernel.
+                * - Del fattore di dilazione `layer->dilation`, che aumenta lo
+                *   spazio tra gli elementi considerati dal kernel.
+                */
+
                 for (int ci = 0; ci < layer->c_in; ci++) {
+                    /**
+                    * Itera sui canali di input (`ci`).
+                    * Ogni canale di input contribuisce al valore del canale
+                    * di output (`co`) attraverso i pesi del kernel.
+                    */
                     int weight_index = co * (layer->c_in * layer->kernel_size) + ki * layer->c_in + ci;
+                    /**
+                    * Calcola l'indice corretto nel vettore dei pesi.
+                    * L'indice dipende:
+                    * - Dal canale di output (`co`), poiché ogni canale di output
+                    *   ha un set di pesi indipendente.
+                    * - Dalla posizione nel kernel (`ki`).
+                    * - Dal canale di input (`ci`).
+                    */
+
                     output += layer->weights[weight_index] * padded_input[input_index * layer->c_in + ci];
+                    /**
+                    * Calcola il contributo del canale di input `ci` alla convoluzione:
+                    * - Moltiplica il peso del kernel corrispondente (`weights[weight_index]`)
+                    *   per il valore della sequenza di input (`padded_input[input_index * layer->c_in + ci]`).
+                    * - Somma il risultato a `output`.
+                    */
                 }
             }
+
             output += layer->biases[co];
+            /**
+            * Dopo aver sommato i contributi di tutti i canali di input per
+            * il canale di output `co`, aggiunge il bias associato.
+            * Il bias è un termine indipendente che migliora la flessibilità
+            * del filtro convoluzionale.
+            */
+
             output_sequence[i * layer->c_out + co] = output;
+            /**
+            * Salva il valore convoluto calcolato per la posizione `i` e
+            * il canale di output `co` nell'array `output_sequence`.
+            * La posizione nell'array è determinata dall'indice `i` e dal
+            * numero totale di canali di output (`layer->c_out`).
+            */
         }
     }
 
