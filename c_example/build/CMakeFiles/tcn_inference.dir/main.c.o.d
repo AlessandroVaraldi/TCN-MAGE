@@ -1,5 +1,5 @@
 CMakeFiles/tcn_inference.dir/main.c.o: \
- /home/avaraldi/Documents/TCN-MAGE/c_example_3/main.c \
+ /home/avaraldi/Documents/TCN-MAGE/c_example/main.c \
  /usr/include/stdc-predef.h /usr/include/stdio.h \
  /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
  /usr/include/features.h /usr/include/features-time64.h \
@@ -48,7 +48,17 @@ CMakeFiles/tcn_inference.dir/main.c.o: \
  /usr/include/x86_64-linux-gnu/bits/atomic_wide_counter.h \
  /usr/include/x86_64-linux-gnu/bits/struct_mutex.h \
  /usr/include/x86_64-linux-gnu/bits/struct_rwlock.h /usr/include/alloca.h \
- /usr/include/x86_64-linux-gnu/bits/stdlib-float.h \
- /home/avaraldi/Documents/TCN-MAGE/c_example_3/tcn.h \
- /home/avaraldi/Documents/TCN-MAGE/c_example_3/causal_conv1d.h \
- /home/avaraldi/Documents/TCN-MAGE/c_example_3/utils.h
+ /usr/include/x86_64-linux-gnu/bits/stdlib-float.h /usr/include/string.h \
+ /usr/include/x86_64-linux-gnu/bits/types/locale_t.h \
+ /usr/include/x86_64-linux-gnu/bits/types/__locale_t.h \
+ /usr/include/strings.h /usr/include/math.h \
+ /usr/include/x86_64-linux-gnu/bits/math-vector.h \
+ /usr/include/x86_64-linux-gnu/bits/libm-simd-decl-stubs.h \
+ /usr/include/x86_64-linux-gnu/bits/flt-eval-method.h \
+ /usr/include/x86_64-linux-gnu/bits/fp-logb.h \
+ /usr/include/x86_64-linux-gnu/bits/fp-fast.h \
+ /usr/include/x86_64-linux-gnu/bits/mathcalls-helper-functions.h \
+ /usr/include/x86_64-linux-gnu/bits/mathcalls.h \
+ /home/avaraldi/Documents/TCN-MAGE/c_example/tcn.h \
+ /home/avaraldi/Documents/TCN-MAGE/c_example/causal_conv1d.h \
+ /home/avaraldi/Documents/TCN-MAGE/c_example/utils.h

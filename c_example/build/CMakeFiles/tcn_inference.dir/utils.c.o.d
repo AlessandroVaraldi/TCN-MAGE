@@ -1,9 +1,9 @@
 CMakeFiles/tcn_inference.dir/utils.c.o: \
- /home/avaraldi/Documents/TCN-MAGE/c_example_3/utils.c \
+ /home/avaraldi/Documents/TCN-MAGE/c_example/utils.c \
  /usr/include/stdc-predef.h \
- /home/avaraldi/Documents/TCN-MAGE/c_example_3/utils.h \
- /home/avaraldi/Documents/TCN-MAGE/c_example_3/tcn.h \
- /home/avaraldi/Documents/TCN-MAGE/c_example_3/causal_conv1d.h \
+ /home/avaraldi/Documents/TCN-MAGE/c_example/utils.h \
+ /home/avaraldi/Documents/TCN-MAGE/c_example/tcn.h \
+ /home/avaraldi/Documents/TCN-MAGE/c_example/causal_conv1d.h \
  /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h /usr/include/stdio.h \
  /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
  /usr/include/features.h /usr/include/features-time64.h \

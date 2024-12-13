@@ -53,10 +53,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/avaraldi/Documents/TCN-MAGE/c_example_3
+CMAKE_SOURCE_DIR = /home/avaraldi/Documents/TCN-MAGE/c_example
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/avaraldi/Documents/TCN-MAGE/c_example_3/build
+CMAKE_BINARY_DIR = /home/avaraldi/Documents/TCN-MAGE/c_example/build
 
 # Include any dependencies generated for this target.
 include CMakeFiles/tcn_inference.dir/depend.make
@@ -70,60 +70,60 @@ include CMakeFiles/tcn_inference.dir/progress.make
 include CMakeFiles/tcn_inference.dir/flags.make
 
 CMakeFiles/tcn_inference.dir/main.c.o: CMakeFiles/tcn_inference.dir/flags.make
-CMakeFiles/tcn_inference.dir/main.c.o: /home/avaraldi/Documents/TCN-MAGE/c_example_3/main.c
+CMakeFiles/tcn_inference.dir/main.c.o: /home/avaraldi/Documents/TCN-MAGE/c_example/main.c
 CMakeFiles/tcn_inference.dir/main.c.o: CMakeFiles/tcn_inference.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/avaraldi/Documents/TCN-MAGE/c_example_3/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building C object CMakeFiles/tcn_inference.dir/main.c.o"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/tcn_inference.dir/main.c.o -MF CMakeFiles/tcn_inference.dir/main.c.o.d -o CMakeFiles/tcn_inference.dir/main.c.o -c /home/avaraldi/Documents/TCN-MAGE/c_example_3/main.c
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/avaraldi/Documents/TCN-MAGE/c_example/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building C object CMakeFiles/tcn_inference.dir/main.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/tcn_inference.dir/main.c.o -MF CMakeFiles/tcn_inference.dir/main.c.o.d -o CMakeFiles/tcn_inference.dir/main.c.o -c /home/avaraldi/Documents/TCN-MAGE/c_example/main.c
 
 CMakeFiles/tcn_inference.dir/main.c.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/tcn_inference.dir/main.c.i"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/avaraldi/Documents/TCN-MAGE/c_example_3/main.c > CMakeFiles/tcn_inference.dir/main.c.i
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/avaraldi/Documents/TCN-MAGE/c_example/main.c > CMakeFiles/tcn_inference.dir/main.c.i
 
 CMakeFiles/tcn_inference.dir/main.c.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/tcn_inference.dir/main.c.s"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/avaraldi/Documents/TCN-MAGE/c_example_3/main.c -o CMakeFiles/tcn_inference.dir/main.c.s
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/avaraldi/Documents/TCN-MAGE/c_example/main.c -o CMakeFiles/tcn_inference.dir/main.c.s
 
 CMakeFiles/tcn_inference.dir/tcn.c.o: CMakeFiles/tcn_inference.dir/flags.make
-CMakeFiles/tcn_inference.dir/tcn.c.o: /home/avaraldi/Documents/TCN-MAGE/c_example_3/tcn.c
+CMakeFiles/tcn_inference.dir/tcn.c.o: /home/avaraldi/Documents/TCN-MAGE/c_example/tcn.c
 CMakeFiles/tcn_inference.dir/tcn.c.o: CMakeFiles/tcn_inference.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/avaraldi/Documents/TCN-MAGE/c_example_3/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building C object CMakeFiles/tcn_inference.dir/tcn.c.o"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/tcn_inference.dir/tcn.c.o -MF CMakeFiles/tcn_inference.dir/tcn.c.o.d -o CMakeFiles/tcn_inference.dir/tcn.c.o -c /home/avaraldi/Documents/TCN-MAGE/c_example_3/tcn.c
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/avaraldi/Documents/TCN-MAGE/c_example/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building C object CMakeFiles/tcn_inference.dir/tcn.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/tcn_inference.dir/tcn.c.o -MF CMakeFiles/tcn_inference.dir/tcn.c.o.d -o CMakeFiles/tcn_inference.dir/tcn.c.o -c /home/avaraldi/Documents/TCN-MAGE/c_example/tcn.c
 
 CMakeFiles/tcn_inference.dir/tcn.c.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/tcn_inference.dir/tcn.c.i"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/avaraldi/Documents/TCN-MAGE/c_example_3/tcn.c > CMakeFiles/tcn_inference.dir/tcn.c.i
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/avaraldi/Documents/TCN-MAGE/c_example/tcn.c > CMakeFiles/tcn_inference.dir/tcn.c.i
 
 CMakeFiles/tcn_inference.dir/tcn.c.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/tcn_inference.dir/tcn.c.s"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/avaraldi/Documents/TCN-MAGE/c_example_3/tcn.c -o CMakeFiles/tcn_inference.dir/tcn.c.s
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/avaraldi/Documents/TCN-MAGE/c_example/tcn.c -o CMakeFiles/tcn_inference.dir/tcn.c.s
 
 CMakeFiles/tcn_inference.dir/causal_conv1d.c.o: CMakeFiles/tcn_inference.dir/flags.make
-CMakeFiles/tcn_inference.dir/causal_conv1d.c.o: /home/avaraldi/Documents/TCN-MAGE/c_example_3/causal_conv1d.c
+CMakeFiles/tcn_inference.dir/causal_conv1d.c.o: /home/avaraldi/Documents/TCN-MAGE/c_example/causal_conv1d.c
 CMakeFiles/tcn_inference.dir/causal_conv1d.c.o: CMakeFiles/tcn_inference.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/avaraldi/Documents/TCN-MAGE/c_example_3/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building C object CMakeFiles/tcn_inference.dir/causal_conv1d.c.o"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/tcn_inference.dir/causal_conv1d.c.o -MF CMakeFiles/tcn_inference.dir/causal_conv1d.c.o.d -o CMakeFiles/tcn_inference.dir/causal_conv1d.c.o -c /home/avaraldi/Documents/TCN-MAGE/c_example_3/causal_conv1d.c
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/avaraldi/Documents/TCN-MAGE/c_example/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building C object CMakeFiles/tcn_inference.dir/causal_conv1d.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/tcn_inference.dir/causal_conv1d.c.o -MF CMakeFiles/tcn_inference.dir/causal_conv1d.c.o.d -o CMakeFiles/tcn_inference.dir/causal_conv1d.c.o -c /home/avaraldi/Documents/TCN-MAGE/c_example/causal_conv1d.c
 
 CMakeFiles/tcn_inference.dir/causal_conv1d.c.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/tcn_inference.dir/causal_conv1d.c.i"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/avaraldi/Documents/TCN-MAGE/c_example_3/causal_conv1d.c > CMakeFiles/tcn_inference.dir/causal_conv1d.c.i
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/avaraldi/Documents/TCN-MAGE/c_example/causal_conv1d.c > CMakeFiles/tcn_inference.dir/causal_conv1d.c.i
 
 CMakeFiles/tcn_inference.dir/causal_conv1d.c.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/tcn_inference.dir/causal_conv1d.c.s"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/avaraldi/Documents/TCN-MAGE/c_example_3/causal_conv1d.c -o CMakeFiles/tcn_inference.dir/causal_conv1d.c.s
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/avaraldi/Documents/TCN-MAGE/c_example/causal_conv1d.c -o CMakeFiles/tcn_inference.dir/causal_conv1d.c.s
 
 CMakeFiles/tcn_inference.dir/utils.c.o: CMakeFiles/tcn_inference.dir/flags.make
-CMakeFiles/tcn_inference.dir/utils.c.o: /home/avaraldi/Documents/TCN-MAGE/c_example_3/utils.c
+CMakeFiles/tcn_inference.dir/utils.c.o: /home/avaraldi/Documents/TCN-MAGE/c_example/utils.c
 CMakeFiles/tcn_inference.dir/utils.c.o: CMakeFiles/tcn_inference.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/avaraldi/Documents/TCN-MAGE/c_example_3/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building C object CMakeFiles/tcn_inference.dir/utils.c.o"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/tcn_inference.dir/utils.c.o -MF CMakeFiles/tcn_inference.dir/utils.c.o.d -o CMakeFiles/tcn_inference.dir/utils.c.o -c /home/avaraldi/Documents/TCN-MAGE/c_example_3/utils.c
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/avaraldi/Documents/TCN-MAGE/c_example/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building C object CMakeFiles/tcn_inference.dir/utils.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/tcn_inference.dir/utils.c.o -MF CMakeFiles/tcn_inference.dir/utils.c.o.d -o CMakeFiles/tcn_inference.dir/utils.c.o -c /home/avaraldi/Documents/TCN-MAGE/c_example/utils.c
 
 CMakeFiles/tcn_inference.dir/utils.c.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/tcn_inference.dir/utils.c.i"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/avaraldi/Documents/TCN-MAGE/c_example_3/utils.c > CMakeFiles/tcn_inference.dir/utils.c.i
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/avaraldi/Documents/TCN-MAGE/c_example/utils.c > CMakeFiles/tcn_inference.dir/utils.c.i
 
 CMakeFiles/tcn_inference.dir/utils.c.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/tcn_inference.dir/utils.c.s"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/avaraldi/Documents/TCN-MAGE/c_example_3/utils.c -o CMakeFiles/tcn_inference.dir/utils.c.s
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/avaraldi/Documents/TCN-MAGE/c_example/utils.c -o CMakeFiles/tcn_inference.dir/utils.c.s
 
 # Object files for target tcn_inference
 tcn_inference_OBJECTS = \
@@ -141,7 +141,7 @@ tcn_inference: CMakeFiles/tcn_inference.dir/causal_conv1d.c.o
 tcn_inference: CMakeFiles/tcn_inference.dir/utils.c.o
 tcn_inference: CMakeFiles/tcn_inference.dir/build.make
 tcn_inference: CMakeFiles/tcn_inference.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/avaraldi/Documents/TCN-MAGE/c_example_3/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Linking C executable tcn_inference"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/avaraldi/Documents/TCN-MAGE/c_example/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Linking C executable tcn_inference"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/tcn_inference.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -153,6 +153,6 @@ CMakeFiles/tcn_inference.dir/clean:
 .PHONY : CMakeFiles/tcn_inference.dir/clean
 
 CMakeFiles/tcn_inference.dir/depend:
-	cd /home/avaraldi/Documents/TCN-MAGE/c_example_3/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/avaraldi/Documents/TCN-MAGE/c_example_3 /home/avaraldi/Documents/TCN-MAGE/c_example_3 /home/avaraldi/Documents/TCN-MAGE/c_example_3/build /home/avaraldi/Documents/TCN-MAGE/c_example_3/build /home/avaraldi/Documents/TCN-MAGE/c_example_3/build/CMakeFiles/tcn_inference.dir/DependInfo.cmake "--color=$(COLOR)"
+	cd /home/avaraldi/Documents/TCN-MAGE/c_example/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/avaraldi/Documents/TCN-MAGE/c_example /home/avaraldi/Documents/TCN-MAGE/c_example /home/avaraldi/Documents/TCN-MAGE/c_example/build /home/avaraldi/Documents/TCN-MAGE/c_example/build /home/avaraldi/Documents/TCN-MAGE/c_example/build/CMakeFiles/tcn_inference.dir/DependInfo.cmake "--color=$(COLOR)"
 .PHONY : CMakeFiles/tcn_inference.dir/depend
 

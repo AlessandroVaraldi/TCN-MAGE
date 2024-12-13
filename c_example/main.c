@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <math.h>
 #include "tcn.h"
 #include "utils.h"
 
@@ -29,29 +31,58 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    // Preparo input dummy: [batch=1, input_dim=1, time_length=50]
-    float *input = (float *)malloc(sizeof(float)*batch*input_dim*time_length);
-    for (int i = 0; i < batch*input_dim*time_length; i++) {
-        input[i] = (float)(i % 10); // un pattern semplice
+    // Carico input salvato da Python
+    // Dimensione: batch * input_dim * time_length * sizeof(float)
+    size_t input_size = (size_t)batch * (size_t)input_dim * (size_t)time_length;
+    float *input_data = (float *)malloc(input_size * sizeof(float));
+    FILE *f = fopen("../../input_data.bin", "rb");
+    if (!f) {
+        printf("Impossibile aprire input_data.bin\n");
+        tcn_free(model);
+        free(input_data);
+        return 1;
+    }
+    size_t read_count = fread(input_data, sizeof(float), input_size, f);
+    fclose(f);
+    if (read_count != input_size) {
+        printf("Lettura input_data.bin incompleta: letti %zu float, attesi %zu\n", read_count, input_size);
+        tcn_free(model);
+        free(input_data);
+        return 1;
     }
 
-    // Output: [batch, output_dim]
+    // Alloca output
     float *output = (float *)malloc(sizeof(float)*batch*output_dim);
 
-    // Eseguo forward
-    tcn_forward(model, input, output, batch, time_length);
+    // Forward
+    tcn_forward(model, input_data, output, batch, time_length);
 
-    // Stampa output
-    printf("Output finale:\n");
+    // Stampa output ottenuto dal C
+    printf("Output dal C:\n");
     for (int b = 0; b < batch; b++) {
         for (int j = 0; j < output_dim; j++) {
-            printf("%.4f ", output[b*output_dim + j]);
+            printf("%.6f ", output[b*output_dim + j]);
         }
         printf("\n");
     }
 
+    // Confronto con output di riferimento Python (opzionale)
+    // Leggi il file output_reference.bin e confronta
+    FILE *fref = fopen("../../output_reference.bin", "rb");
+    if (fref) {
+        float ref_out;
+        size_t ref_count = fread(&ref_out, sizeof(float), 1, fref);
+        fclose(fref);
+        if (ref_count == 1) {
+            printf("Output di riferimento Python: %.6f\n", ref_out);
+            printf("Differenza: %.6f\n", fabs(output[0] - ref_out));
+        } else {
+            printf("Impossibile leggere il riferimento da output_reference.bin\n");
+        }
+    }
+
     // Cleanup
-    free(input);
+    free(input_data);
     free(output);
     tcn_free(model);
 
