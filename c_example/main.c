@@ -1,59 +1,59 @@
-#include "tcn_network.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
+#include "tcn.h"
+#include "utils.h"
 
-#define PI 3.14159265358979323846
-
-// Funzione per generare una sequenza deterministica, ad esempio una funzione sinusoidale
-void generate_deterministic_input(double* input_sequence, int sequence_length, int input_channels) {
-    for (int i = 0; i < sequence_length; i++) {
-        // Esempio di funzione sinusoidale come input deterministico
-        input_sequence[i] = sin(2 * PI * i / sequence_length);
-    }
-}
-
-int main() {
-    int num_layers = 8;        // Numero di layer nella rete
-    int input_channels = 1;    // Canali di ingresso (ad es. unidimensionali per dati di vibrazione)
-    int output_channels = 1;   // Canali di uscita (ad es. predizione della prossima vibrazione)
-    int sequence_length = 16;  // Lunghezza della sequenza di input/output
-
-    // Crea la sequenza di input e output (inizializzati a zero)
-    double* input_sequence = (double*)calloc(sequence_length * input_channels, sizeof(double));
-    double* output_sequence = (double*)calloc(sequence_length * output_channels, sizeof(double));
-
-    // Verifica l'allocazione della memoria
-    if (input_sequence == NULL || output_sequence == NULL) {
-        fprintf(stderr, "Failed to allocate memory for input or output sequences\n");
-        return EXIT_FAILURE;
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        printf("Usage: %s <weights_dir>\n", argv[0]);
+        return 1;
     }
 
-    // Genera un input deterministico usando una funzione sinusoidale
-    generate_deterministic_input(input_sequence, sequence_length, input_channels);
+    const char *weights_dir = argv[1];
 
-    // Inizializzazione della rete TCN
-    TCNNetwork network;
-    initialize_tcn_network(&network, num_layers, input_channels, output_channels, sequence_length);
+    int input_dim = 7;
+    int output_dim = 1;
+    int hidden_dim = 16;
+    int num_layers = 3;
+    int kernel_size = 3;
+    int batch = 1;
+    int time_length = 50;
 
-    // Applicazione della rete TCN sull'input
-    apply_tcn_network(&network, input_sequence, output_sequence);
+    // Inizializza modello
+    TCNModel *model = tcn_init(input_dim, output_dim, hidden_dim, num_layers, kernel_size);
 
-    // Stampa dell'output in output.txt
-    FILE* output_file = fopen("output.txt", "w");
-    if (output_file == NULL) {
-        fprintf(stderr, "Failed to open output file\n");
-        return EXIT_FAILURE;
+    // Carico pesi
+    if (load_tcn_weights(model, weights_dir) < 0) {
+        printf("Errore nel caricamento dei pesi.\n");
+        tcn_free(model);
+        return 1;
     }
 
-    for (int i = 0; i < sequence_length; i++) {
-        fprintf(output_file, "%f\n", output_sequence[i]);
+    // Preparo input dummy: [batch=1, input_dim=1, time_length=50]
+    float *input = (float *)malloc(sizeof(float)*batch*input_dim*time_length);
+    for (int i = 0; i < batch*input_dim*time_length; i++) {
+        input[i] = (float)(i % 10); // un pattern semplice
     }
 
-    // Liberazione della memoria
-    free_tcn_network(&network);
-    free(input_sequence);
-    free(output_sequence);
+    // Output: [batch, output_dim]
+    float *output = (float *)malloc(sizeof(float)*batch*output_dim);
 
-    return EXIT_SUCCESS;
+    // Eseguo forward
+    tcn_forward(model, input, output, batch, time_length);
+
+    // Stampa output
+    printf("Output finale:\n");
+    for (int b = 0; b < batch; b++) {
+        for (int j = 0; j < output_dim; j++) {
+            printf("%.4f ", output[b*output_dim + j]);
+        }
+        printf("\n");
+    }
+
+    // Cleanup
+    free(input);
+    free(output);
+    tcn_free(model);
+
+    return 0;
 }

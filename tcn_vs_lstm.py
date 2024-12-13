@@ -8,13 +8,18 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, Dataset, random_split
 from tqdm import tqdm
 import time
+import os
 
 # Verifica se CUDA è disponibile
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Usando dispositivo: {device}")
 
 # === Parametro Fisso per Sequence Length ===
-SEQUENCE_LENGTH = 8  # Imposta la lunghezza della sequenza in base alle tue esigenze
+SEQUENCE_LENGTH = 16  # Imposta la lunghezza della sequenza in base alle tue esigenze
+
+# === Imposta il seed per la riproducibilità ===
+seed = 5
+np.random.seed(seed)
 
 # === Classe per la creazione del dataset ===
 class TimeSeriesDataset(Dataset):
@@ -77,6 +82,7 @@ class LSTMModel(nn.Module):
         _, (hidden, _) = self.lstm(x)
         return self.fc(hidden[-1])
     
+
 def load_data():
     while True:
         file_path = input("\n> Inserisci il percorso del file .csv (ad esempio, 'dati.csv'): ")
@@ -99,7 +105,6 @@ def load_data():
             print("\n> Errore: il file è vuoto o danneggiato. Riprova.\n")
 
 
-# === Funzione per la pulizia dei dati e la gestione dei NaN ===
 def check_and_clean_data(data, input_cols, output_cols):
     nan_count = data[input_cols + output_cols].isna().sum().sum()
     if nan_count > 0:
@@ -108,7 +113,6 @@ def check_and_clean_data(data, input_cols, output_cols):
     return data
 
 
-# === Funzione di training ===
 def train_model(model, train_loader, val_loader, epochs=1000, patience=50, threshold=1e-4, learning_rate=1e-3):
     print(f"\n> Inizio training del modello: {type(model).__name__}\n")
     model.to(device)  # Trasferisce il modello su GPU
@@ -120,6 +124,8 @@ def train_model(model, train_loader, val_loader, epochs=1000, patience=50, thres
 
     plt.ion()
     fig, ax = plt.subplots()
+
+    best_model_path = f'best_model_{type(model).__name__}.pth'
 
     try:
         for epoch in range(epochs):
@@ -161,7 +167,7 @@ def train_model(model, train_loader, val_loader, epochs=1000, patience=50, thres
             if val_loss < best_val_loss - threshold:
                 best_val_loss = val_loss
                 epochs_without_improvement = 0
-                torch.save(model.state_dict(), f'best_model_{type(model).__name__}.pth')
+                torch.save(model.state_dict(), best_model_path)
                 print(f"> Epoch {epoch+1}: Miglioramento della Validation Loss, modello salvato.")
             else:
                 epochs_without_improvement += 1
@@ -177,28 +183,27 @@ def train_model(model, train_loader, val_loader, epochs=1000, patience=50, thres
     return model, train_losses, val_losses
 
 
-# === Funzione per testare il modello ===
 def test_model(model, test_loader):
     model.eval()
     model.to(device)  # Trasferisce il modello su GPU
     predictions, actuals = [], []
+    start_inference_time = time.time()
     with torch.no_grad():
         for inputs, targets in test_loader:
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
             predictions.append(outputs.cpu().numpy())  # Riporta i dati su CPU per elaborazioni successive
             actuals.append(targets.cpu().numpy())
+    inference_time = time.time() - start_inference_time
     predictions = np.concatenate(predictions, axis=0)
     actuals = np.concatenate(actuals, axis=0)
-    return predictions, actuals
+    return predictions, actuals, inference_time
 
 
-# === Funzione per il calcolo dell'RMSE ===
 def calculate_rmse(predictions, actuals):
     return np.sqrt(np.mean((predictions - actuals) ** 2))
 
 
-# === Funzione per confrontare TCN e LSTM ===
 def compare_models(tcn_model, lstm_model, train_loader, val_loader, test_loader, epochs=100, patience=10, learning_rate=1e-3):
     print("\n> Inizio confronto dei modelli...")
 
@@ -212,8 +217,8 @@ def compare_models(tcn_model, lstm_model, train_loader, val_loader, test_loader,
 
     # Test modelli
     print("\n> Test modelli...")
-    tcn_predictions, tcn_actuals = test_model(trained_tcn, test_loader)
-    lstm_predictions, lstm_actuals = test_model(trained_lstm, test_loader)
+    tcn_predictions, tcn_actuals, tcn_inf_time = test_model(trained_tcn, test_loader)
+    lstm_predictions, lstm_actuals, lstm_inf_time = test_model(trained_lstm, test_loader)
 
     # Calcolo RMSE
     tcn_rmse = calculate_rmse(tcn_predictions, tcn_actuals)
@@ -221,6 +226,9 @@ def compare_models(tcn_model, lstm_model, train_loader, val_loader, test_loader,
 
     print(f"\n> RMSE TCN: {tcn_rmse:.4f}")
     print(f"> RMSE LSTM: {lstm_rmse:.4f}")
+    
+    print(f"\n> Tempo di inferenza TCN: {tcn_inf_time:.4f} secondi")
+    print(f"> Tempo di inferenza LSTM: {lstm_inf_time:.4f} secondi")
 
     # Confronto visivo
     plt.figure()
@@ -233,34 +241,33 @@ def compare_models(tcn_model, lstm_model, train_loader, val_loader, test_loader,
     plt.title("Confronto tra TCN e LSTM")
     plt.show()
 
-
-# === Funzione per calcolare il tempo di inferenza ===
-def measure_inference_time(model, data_loader, num_batches=10):
-    model.eval()
-    model.to(device)  # Trasferisce il modello su GPU
-    total_time = 0.0
-    with torch.no_grad():
-        for i, (inputs, _) in enumerate(data_loader):
-            if i >= num_batches:  # Limita il numero di batch
-                break
-            inputs = inputs.to(device)
-            start_time = time.time()
-            _ = model(inputs)
-            end_time = time.time()
-            total_time += (end_time - start_time)
-    avg_time_per_batch = total_time / min(len(data_loader), num_batches)
-    return avg_time_per_batch
+    # Ritorno i modelli addestrati (potrebbe servire a successive elaborazioni)
+    return trained_tcn, trained_lstm
 
 
-# === Confronto dei tempi di inferenza ===
-def compare_inference_time(tcn_model, lstm_model, test_loader):
-    print("\n> Calcolo del tempo medio di inferenza...")
-    tcn_time = measure_inference_time(tcn_model, test_loader)
-    lstm_time = measure_inference_time(lstm_model, test_loader)
+def export_tcn_weights(model, output_dir):
+    """
+    Esporta i pesi e i bias del modello TCN in formato binario.
+    Struttura dei file:
+    layer0_weight.bin, layer0_bias.bin
+    layer1_weight.bin, layer1_bias.bin
+    ...
+    I pesi sono salvati come float32 con la shape [out_channels, in_channels, kernel_size].
+    I bias sono salvati come float32 con la shape [out_channels].
+    """
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-    print(f"\n> Tempo medio di inferenza per batch:")
-    print(f"  - TCN: {tcn_time:.6f} secondi")
-    print(f"  - LSTM: {lstm_time:.6f} secondi")
+    for i, layer in enumerate(model.layers):
+        # layer è un CausalConv1d, che contiene layer.conv
+        w = layer.conv.weight.data.cpu().numpy()  # shape: [out_channels, in_channels, kernel_size]
+        b = layer.conv.bias.data.cpu().numpy()    # shape: [out_channels]
+
+        w_file = os.path.join(output_dir, f"layer{i}_weight.bin")
+        b_file = os.path.join(output_dir, f"layer{i}_bias.bin")
+
+        w.astype(np.float32).tofile(w_file)
+        b.astype(np.float32).tofile(b_file)
 
 
 # === Caricamento del Dataset ===
@@ -280,21 +287,27 @@ test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 # Parametri per i modelli
 input_dim, output_dim, hidden_dim, num_layers = len(input_cols), len(output_cols), 16, 3
+print(f"\n> Dimensione input: {input_dim}, Dimensione output: {output_dim}")
+exit()
 tcn_model = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, num_layers=num_layers)
 lstm_model = LSTMModel(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, num_layers=num_layers)
 
 # Confronto modelli
-compare_models(tcn_model, lstm_model, train_loader, val_loader, test_loader, epochs=100, patience=100, learning_rate=1e-3)
+trained_tcn, trained_lstm = compare_models(tcn_model, lstm_model, train_loader, val_loader, test_loader, epochs=100, patience=100, learning_rate=1e-3)
 
 # Esportazione modelli in ONNX
 dummy_input = torch.randn(1, input_dim, SEQUENCE_LENGTH).to(device)
-torch.onnx.export(tcn_model, dummy_input, "tcn_model.onnx", verbose=True)
-torch.onnx.export(lstm_model, dummy_input, "lstm_model.onnx", verbose=True)
+torch.onnx.export(trained_tcn, dummy_input, "tcn_model.onnx", verbose=True)
+torch.onnx.export(trained_lstm, dummy_input, "lstm_model.onnx", verbose=True)
 
-# Confronto dei tempi di inferenza
-print("\n=== Confronto dei Tempi di Inferenza ===")
-compare_inference_time(tcn_model, lstm_model, test_loader)
+# Ora ricarichiamo il best model TCN salvato (best_model_TCN.pth) e esportiamo i pesi
+best_tcn = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, num_layers=num_layers)
+best_tcn.load_state_dict(torch.load("best_model_TCN.pth", map_location=device))
+best_tcn.eval()
 
+export_tcn_weights(best_tcn, "weights")
+
+print("\n> Pesi TCN esportati nella cartella 'weights' con successo!")
 
 # path: NYC_Weather_2016_2022.csv
 # output: windspeed_10m (km/h)
