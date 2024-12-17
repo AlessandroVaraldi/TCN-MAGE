@@ -13,16 +13,23 @@ int main(int argc, char **argv) {
 
     const char *weights_dir = argv[1];
 
+    char INFO_MODE = 0;
+
+    if (argc > 2 && strcmp(argv[2], "info") == 0) {
+        printf("Info mode attivato.\n");
+        INFO_MODE = 1;
+    }
+
     int input_dim = 7;
     int output_dim = 1;
     int hidden_dim = 16;
-    int num_layers = 3;
-    int kernel_size = 3;
+    int num_layers = 8;
+    int kernel_size = 4;
     int batch = 1;
     int time_length = 50;
 
     // Inizializza modello
-    TCNModel *model = tcn_init(input_dim, output_dim, hidden_dim, num_layers, kernel_size);
+    TCNModel *model = tcn_init(input_dim, output_dim, hidden_dim, num_layers-1, kernel_size);
 
     // Carico pesi
     if (load_tcn_weights(model, weights_dir) < 0) {
@@ -55,10 +62,10 @@ int main(int argc, char **argv) {
     float *output = (float *)malloc(sizeof(float)*batch*output_dim);
 
     // Forward
-    tcn_forward(model, input_data, output, batch, time_length);
+    tcn_forward(model, input_data, output, batch, time_length, INFO_MODE);
 
     // Stampa output ottenuto dal C
-    printf("Output dal C:\n");
+    printf("Output dal C: ");
     for (int b = 0; b < batch; b++) {
         for (int j = 0; j < output_dim; j++) {
             printf("%.6f ", output[b*output_dim + j]);

@@ -29,6 +29,7 @@ int load_tcn_weights(TCNModel *model, const char *weights_dir) {
 
         // Struttura attesa per questo layer
         size_t expected_weight_size = (size_t)out_ch * (size_t)in_ch * (size_t)ks;
+        //printf("Layer %d: %d x %d x %d = %zu\n", i, out_ch, in_ch, ks, expected_weight_size);
         size_t expected_bias_size = (size_t)out_ch;
 
         snprintf(path, sizeof(path), "%s/layer%d_weight.bin", weights_dir, i);

@@ -27,5 +27,4 @@ add_executable(tcn_inference ${SOURCES})
 # ad esempio ottimizzazione o debug
 # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wall")
 
-# Non sono necessarie librerie esterne in questo esempio,
-# ma potresti linkarne qualcuna se necessario.
+target_link_libraries(tcn_inference m)

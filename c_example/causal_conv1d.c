@@ -1,5 +1,7 @@
 #include "causal_conv1d.h"
 #include <string.h> // Per l'uso di memset
+#include <stdio.h> // Per la stampa di debug
+#include <time.h>
 
 /**
  * Esegue la convoluzione causale 1D per un livello (layer) del modello TCN.
@@ -29,7 +31,8 @@ void causal_conv1d_forward(
     float *output,
     int batch,
     int in_channels,
-    int input_length
+    int input_length,
+    char INFO_MODE
 ) {
     // Azzeriamo l'output prima di iniziare (impostando a zero tutti i valori).
     // Questo perché in seguito aggiungeremo il bias e il contributo dei vari canali e kernel.
@@ -41,6 +44,11 @@ void causal_conv1d_forward(
     int ks = layer->kernel_size;
     int oc = layer->out_channels;
     int ic = layer->in_channels; // Deve coincidere con in_channels passato come argomento.
+    printf("%c", INFO_MODE);
+    if (INFO_MODE) printf("out_channels=%d, in_channels=%d, kernel_size=%d, dilation=%d\n", oc, ic, ks, dilation);
+
+    // Misurazione del tempo di esecuzione del batch
+    clock_t start_time = clock();
 
     // Iteriamo su ogni sequenza del batch
     for (int b = 0; b < batch; b++) {
@@ -54,19 +62,23 @@ void causal_conv1d_forward(
                 output[b * oc * input_length + oc_i * input_length + t] = layer->bias[oc_i];
             }
 
+            //printf("Layer %d output (after bias), first 10 elements:\n", oc_i);
+            //for (int idx = 0; idx < 10; idx++) {
+            //    printf("%f ", output[b * oc * input_length + oc_i * input_length + idx]);
+            //}
+            //printf("\n");
+
             // Ora applichiamo la convoluzione causale per ogni canale in input.
             // La convoluzione scorrerà nel tempo e, per ogni istante t,
             // considererà i valori precedenti a t secondo il kernel e la dilatazione.
-            for (int ic_i = 0; ic_i < ic; ic_i++) {
-                // Per ogni timestep della sequenza
-                for (int t = 0; t < input_length; t++) {
-                    float val = 0.0f; // accumulator per la somma dei contributi del kernel
+            for (int t = 0; t < input_length; t++) {
+                for (int ic_i = 0; ic_i < ic; ic_i++) {
+                    float val = 0.0f; // Accumulator per la somma dei contributi del kernel
                     // Iteriamo sul kernel (di lunghezza ks)
                     for (int k = 0; k < ks; k++) {
                         // Calcoliamo l'indice temporale sull'input corrispondente all'offset k
                         // tenendo conto della dilazione (dilation).
-                        int t_in = t - k * dilation;
-
+                        int t_in = t - ((ks - 1 - k) * dilation);
                         // Causale: se t_in < 0 significa che stiamo cercando di usare informazioni future,
                         // che non vanno considerate. Quindi aggiungiamo solo se t_in >= 0.
                         if (t_in >= 0) {
@@ -84,12 +96,16 @@ void causal_conv1d_forward(
                             val += w * x;
                         }
                     }
-                    // Aggiungiamo il contributo del kernel per questo canale di input all'output
+                    // Aggiungiamo il contributo del kernel per questo canale di input all'output;
                     output[b * oc * input_length + oc_i * input_length + t] += val;
                 }
             }
         }
     }
+
+    clock_t end_time = clock();
+    double elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
+    if (INFO_MODE) printf("     Tempo di esecuzione per un batch: %.6f secondi\n", elapsed_time);
 
     // Alla fine di questo processo, 'output' contiene la somma dei bias e delle convoluzioni
     // per tutti i canali in input, producendo così i canali di output.

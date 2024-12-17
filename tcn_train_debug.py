@@ -46,38 +46,31 @@ class CausalConv1d(nn.Module):
     def forward(self, x):
         padding = (self.kernel_size - 1) * self.dilation
         x = F.pad(x, (padding, 0))
-        return self.conv(x)
-
+        out = self.conv(x)
+        return out
 
 class TCN(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=32, num_layers=2):
+    def __init__(self, input_dim, output_dim, hidden_dim=32, kernel_size=3, num_layers=2):
         super(TCN, self).__init__()
-        self.layers = nn.ModuleList([CausalConv1d(input_dim, hidden_dim, kernel_size=3, dilation=1)])
+        self.layers = nn.ModuleList([CausalConv1d(input_dim, hidden_dim, kernel_size, dilation=1)])
         for i in range(1, num_layers - 1):
             dilation = 2 ** i
-            self.layers.append(CausalConv1d(hidden_dim, hidden_dim, kernel_size=3, dilation=dilation))
+            self.layers.append(CausalConv1d(hidden_dim, hidden_dim, kernel_size, dilation=dilation))
         dilation = 2 ** (num_layers - 1)
-        self.layers.append(CausalConv1d(hidden_dim, output_dim, kernel_size=3, dilation=dilation))
+        self.layers.append(CausalConv1d(hidden_dim, output_dim, kernel_size, dilation=dilation))
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        for layer in self.layers[:-1]:
-            x = self.relu(layer(x))
+        for i, layer in enumerate(self.layers[:-1]):
+            pre = layer(x)
+            x = self.relu(pre)
+        
+        # Ultimo layer senza ReLU
         x = self.layers[-1](x)
-        return x[:, :, -1]
 
+        out = x[:, :, -1]
+        return out
 
-class LSTMModel(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=32, num_layers=2):
-        super(LSTMModel, self).__init__()
-        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, output_dim)
-
-    def forward(self, x):
-        x = x.transpose(1, 2)
-        _, (hidden, _) = self.lstm(x)
-        return self.fc(hidden[-1])
-    
 
 def load_data():
     while True:
@@ -169,7 +162,6 @@ def train_model(model, train_loader, val_loader, epochs=1000, patience=50, thres
                 break
     except KeyboardInterrupt:
         print(f"\n> Training interrotto manualmente alla epoca {epoch+1}.\n")
-
     plt.ioff()
     plt.show()
     return model, train_losses, val_losses
@@ -193,42 +185,8 @@ def test_model(model, test_loader):
 
 
 def calculate_rmse(predictions, actuals):
-    return np.sqrt(np.mean((predictions - actuals) ** 2))
-
-
-def compare_models(tcn_model, lstm_model, train_loader, val_loader, test_loader, epochs=100, patience=10, learning_rate=1e-3):
-    print("\n> Inizio confronto dei modelli...")
-
-    print("\n> Addestramento modello TCN...")
-    trained_tcn, _, _ = train_model(tcn_model, train_loader, val_loader, epochs, patience, learning_rate)
-
-    print("\n> Addestramento modello LSTM...")
-    trained_lstm, _, _ = train_model(lstm_model, train_loader, val_loader, epochs, patience, learning_rate)
-
-    print("\n> Test modelli...")
-    tcn_predictions, tcn_actuals, tcn_inf_time = test_model(trained_tcn, test_loader)
-    lstm_predictions, lstm_actuals, lstm_inf_time = test_model(trained_lstm, test_loader)
-
-    tcn_rmse = calculate_rmse(tcn_predictions, tcn_actuals)
-    lstm_rmse = calculate_rmse(lstm_predictions, lstm_actuals)
-
-    print(f"\n> RMSE TCN: {tcn_rmse:.4f}")
-    print(f"> RMSE LSTM: {lstm_rmse:.4f}")
-
-    print(f"\n> Tempo di inferenza TCN: {tcn_inf_time:.4f} secondi")
-    print(f"> Tempo di inferenza LSTM: {lstm_inf_time:.4f} secondi")
-
-    plt.figure()
-    plt.plot(tcn_actuals, label="Actual")
-    plt.plot(tcn_predictions, label="TCN Predictions")
-    plt.plot(lstm_predictions, label="LSTM Predictions")
-    plt.xlabel("Time Step")
-    plt.ylabel("Output")
-    plt.legend()
-    plt.title("Confronto tra TCN e LSTM")
-    plt.show()
-
-    return trained_tcn, trained_lstm
+    rmse = np.sqrt(np.mean((predictions - actuals) ** 2))
+    return rmse
 
 
 def export_tcn_weights(model, output_dir):
@@ -259,22 +217,36 @@ train_loader = DataLoader(train_dataset, batch_size=32, shuffle=False)
 val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-# Parametri per i modelli
-input_dim, output_dim, hidden_dim, num_layers = len(input_cols), len(output_cols), 16, 3
-kernel_size = 3
+# Parametri per il modello TCN
+input_dim, output_dim, hidden_dim, kernel_size, num_layers = len(input_cols), len(output_cols), 16, 4, 8
 
-tcn_model = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, num_layers=num_layers)
-lstm_model = LSTMModel(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, num_layers=num_layers)
+tcn_model = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, kernel_size=kernel_size, num_layers=num_layers)
 
-trained_tcn, trained_lstm = compare_models(tcn_model, lstm_model, train_loader, val_loader, test_loader, epochs=100, patience=100, learning_rate=1e-3)
+# Addestramento modello TCN
+trained_tcn, _, _ = train_model(tcn_model, train_loader, val_loader, epochs=100, patience=100, learning_rate=1e-3)
 
-# Esportazione modelli in ONNX
+# Test del modello TCN
+tcn_predictions, tcn_actuals, tcn_inf_time = test_model(trained_tcn, test_loader)
+tcn_rmse = calculate_rmse(tcn_predictions, tcn_actuals)
+
+print(f"\n> RMSE TCN: {tcn_rmse:.4f}")
+print(f"\n> Tempo di inferenza TCN: {tcn_inf_time:.4f} secondi")
+
+plt.figure()
+plt.plot(tcn_actuals, label="Actual")
+plt.plot(tcn_predictions, label="TCN Predictions")
+plt.xlabel("Time Step")
+plt.ylabel("Output")
+plt.legend()
+plt.title("Predictions TCN")
+plt.show()
+
+# Esportazione modello TCN in ONNX
 dummy_input = torch.randn(1, input_dim, SEQUENCE_LENGTH).to(device)
 torch.onnx.export(trained_tcn, dummy_input, "tcn_model.onnx", verbose=True)
-torch.onnx.export(trained_lstm, dummy_input, "lstm_model.onnx", verbose=True)
 
 # Ricarichiamo il best model TCN
-best_tcn = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, num_layers=num_layers)
+best_tcn = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, kernel_size=kernel_size, num_layers=num_layers)
 best_tcn.load_state_dict(torch.load("best_model_TCN.pth", map_location=device))
 best_tcn.eval()
 
@@ -283,12 +255,9 @@ export_tcn_weights(best_tcn, "weights")
 print("\n> Pesi TCN esportati nella cartella 'weights' con successo!")
 
 # Ora creiamo un input di test e calcoliamo l'output di riferimento
-# Assicuriamoci di usare gli stessi parametri che useremo in C
-# Ad esempio, batch=1 e time_length=50 (adeguare se necessario)
 batch = 1
-time_length = 50
 
-torch_input = torch.randn(batch, input_dim, time_length, dtype=torch.float32)
+torch_input = torch.randn(batch, input_dim, SEQUENCE_LENGTH, dtype=torch.float32)
 with torch.no_grad():
     py_output = best_tcn(torch_input).cpu().numpy() # [batch, output_dim]
 
@@ -299,8 +268,17 @@ np_input = torch_input.cpu().numpy()
 np_input.tofile("input_data.bin")        # input: [batch, input_dim, time_length]
 py_output.tofile("output_reference.bin") # output: [batch, output_dim]
 
+# Salviamo l'input e l'output di riferimento in numpy
+np.save("./weights/numpy/input_data.npy", np_input)
+np.save("./weights/numpy/output_reference.npy", py_output)
+
+# Salviamo pesi e bias in numpy
+for i, layer in enumerate(best_tcn.layers):
+    np.save(f"./weights/numpy/layer{i}_weight.npy", layer.conv.weight.data.cpu().numpy())
+    np.save(f"./weights/numpy/layer{i}_bias.npy", layer.conv.bias.data.cpu().numpy())
+
 print("> Input e output di riferimento esportati con successo!")
 
 # path: NYC_Weather_2016_2022.csv
-# output: windspeed_10m (km/h)
 # input: temperature_2m (°C),cloudcover (%),cloudcover_low (%),cloudcover_mid (%),cloudcover_high (%),precipitation (mm),winddirection_10m (°)
+# output: windspeed_10m (km/h)

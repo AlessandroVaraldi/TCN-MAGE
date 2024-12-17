@@ -31,6 +31,6 @@ void tcn_free(TCNModel *model);
  * input: [batch, input_dim, time]
  * output: [batch, output_dim], prendendo l'ultimo timestep.
  */
-void tcn_forward(TCNModel *model, const float *input, float *output, int batch, int time_length);
+void tcn_forward(TCNModel *model, const float *input, float *output, int batch, int time_length, char INFO_MODE);
 
 #endif

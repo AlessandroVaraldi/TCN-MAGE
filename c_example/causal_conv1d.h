@@ -23,7 +23,8 @@ void causal_conv1d_forward(
     float *output,
     int batch,
     int in_channels,
-    int input_length
+    int input_length,
+    char INFO_MODE
 );
 
 #endif
