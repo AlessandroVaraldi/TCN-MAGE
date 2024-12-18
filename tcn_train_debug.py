@@ -15,7 +15,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Usando dispositivo: {device}")
 
 # === Parametro Fisso per Sequence Length ===
-SEQUENCE_LENGTH = 50  # Imposta la lunghezza della sequenza in base alle tue esigenze
+SEQUENCE_LENGTH = 256  # Imposta la lunghezza della sequenza in base alle tue esigenze
 
 # === Imposta il seed per la riproducibilità ===
 seed = 5
@@ -218,7 +218,7 @@ val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 # Parametri per il modello TCN
-input_dim, output_dim, hidden_dim, kernel_size, num_layers = len(input_cols), len(output_cols), 16, 4, 8
+input_dim, output_dim, hidden_dim, kernel_size, num_layers = len(input_cols), len(output_cols), 8, 3, 16
 
 tcn_model = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, kernel_size=kernel_size, num_layers=num_layers)
 

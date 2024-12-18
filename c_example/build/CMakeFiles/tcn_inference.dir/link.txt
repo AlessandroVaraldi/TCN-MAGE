@@ -1,1 +1,0 @@
-/usr/bin/cc CMakeFiles/tcn_inference.dir/main.c.o CMakeFiles/tcn_inference.dir/tcn.c.o CMakeFiles/tcn_inference.dir/causal_conv1d.c.o CMakeFiles/tcn_inference.dir/utils.c.o -o tcn_inference  -lm 
