@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
     int input_dim = 7;
     int output_dim = 1;
     int hidden_dim = 8;
-    int num_layers = 4;
+    int num_layers = 16;
     int kernel_size = 3;
     int batch = 1;
     int time_length = 256;
