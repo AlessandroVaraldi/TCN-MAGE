@@ -15,7 +15,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Usando dispositivo: {device}")
 
 # === Parametro Fisso per Sequence Length ===
-SEQUENCE_LENGTH = 50  # Imposta la lunghezza della sequenza in base alle tue esigenze
+SEQUENCE_LENGTH = 8  # Imposta la lunghezza della sequenza in base alle tue esigenze
 
 # === Imposta il seed per la riproducibilità ===
 seed = 5
@@ -163,7 +163,8 @@ def calculate_rmse(predictions, actuals):
     return rmse
 
 def quantize_data(data, dtype, scale):
-    return (data / scale).astype(dtype)
+    scaled_data = data * scale
+    return scaled_data.astype(dtype)
 
 def save_quantized_data(data, path, dtypes, scales):
     for dtype, scale in zip(dtypes, scales):
@@ -171,10 +172,12 @@ def save_quantized_data(data, path, dtypes, scales):
         os.makedirs(dtype_folder, exist_ok=True)
         quantized_data = quantize_data(data, dtype, scale)
         np.save(os.path.join(dtype_folder, "data.npy"), quantized_data)
+        # Salva anche in formato binario
+        with open(os.path.join(dtype_folder, "data.bin"), "wb") as f:
+            f.write(quantized_data.tobytes())
 
-def export_tcn_weights(model, output_dir):
+def export_tcn_weights(model, output_dir, scales):
     dtypes = [np.float32, np.int32, np.int16, np.int8]
-    scales = [1.0, 4.0, 16.0, 64.0]  # 1/4 intero, 1/4 frazionario
 
     for i, layer in enumerate(model.layers):
         layer_dir = os.path.join(output_dir, f"layer{i}")
@@ -194,6 +197,7 @@ def export_tcn_weights(model, output_dir):
 # Parametri predefiniti
 file_path = "NYC_Weather_2016_2022.csv"
 input_cols = ["temperature_2m (°C)", "cloudcover (%)", "cloudcover_low (%)", "cloudcover_mid (%)", "cloudcover_high (%)", "precipitation (mm)", "winddirection_10m (°)"]
+input_cols = ["temperature_2m (°C)", "cloudcover (%)", "precipitation (mm)", "winddirection_10m (°)"]
 output_cols = ["windspeed_10m (km/h)"]
 
 # Caricamento e pulizia del dataset
@@ -210,7 +214,12 @@ val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 # Parametri per il modello TCN
-input_dim, output_dim, hidden_dim, kernel_size, num_layers = len(input_cols), len(output_cols), 16, 4, 8
+input_dim = len(input_cols)
+output_dim = len(output_cols)
+
+hidden_dim = 2
+kernel_size = 3 
+num_layers = 3
 
 tcn_model = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, kernel_size=kernel_size, num_layers=num_layers)
 
@@ -243,7 +252,8 @@ best_tcn.load_state_dict(torch.load("best_model_TCN.pth", map_location=device))
 best_tcn.eval()
 
 # Esporta i pesi per il codice C
-export_tcn_weights(best_tcn, "data")
+scales = [1.0, (2**16), (2**8), (2**4)]
+export_tcn_weights(best_tcn, "data", scales)
 
 # Ora creiamo un input di test e calcoliamo l'output di riferimento
 batch = 1
@@ -260,7 +270,7 @@ output_dir = os.path.join("data", "outputs")
 os.makedirs(input_dir, exist_ok=True)
 os.makedirs(output_dir, exist_ok=True)
 
-save_quantized_data(torch_input.cpu().numpy(), input_dir, [np.float32, np.int32, np.int16, np.int8], [1.0, 4.0, 16.0, 64.0])
-save_quantized_data(py_output, output_dir, [np.float32, np.int32, np.int16, np.int8], [1.0, 4.0, 16.0, 64.0])
+save_quantized_data(torch_input.cpu().numpy(), input_dir, [np.float32, np.int32, np.int16, np.int8], scales)
+save_quantized_data(py_output, output_dir, [np.float32, np.int32, np.int16, np.int8], scales)
 
 print("> Input e output di riferimento esportati con successo!")
