@@ -1,3 +1,0 @@
-/home/alessandro/OneDrive/Documenti/Politecnico/Progetti/TCN-MAGE/STATIC_c/build/CMakeFiles/tcn_inference.dir
-/home/alessandro/OneDrive/Documenti/Politecnico/Progetti/TCN-MAGE/STATIC_c/build/CMakeFiles/edit_cache.dir
-/home/alessandro/OneDrive/Documenti/Politecnico/Progetti/TCN-MAGE/STATIC_c/build/CMakeFiles/rebuild_cache.dir

@@ -1,1 +1,0 @@
-/usr/bin/cc CMakeFiles/tcn_inference.dir/main.c.o -o tcn_inference  -lm 
