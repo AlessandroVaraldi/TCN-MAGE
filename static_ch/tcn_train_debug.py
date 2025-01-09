@@ -20,6 +20,7 @@ SEQUENCE_LENGTH = 8  # Imposta la lunghezza della sequenza in base alle tue esig
 # === Imposta il seed per la riproducibilità ===
 seed = 5
 np.random.seed(seed)
+torch.manual_seed(seed)
 
 class TimeSeriesDataset(Dataset):
     def __init__(self, data, input_cols, output_cols, sequence_length=SEQUENCE_LENGTH):
@@ -193,6 +194,108 @@ def export_tcn_weights(model, output_dir, scales):
 
         save_quantized_data(w, weight_dir, dtypes, scales)
         save_quantized_data(b, bias_dir, dtypes, scales)
+        
+def generate_header_file(data_dict, header_path, dtype):
+    """Genera un unico file .h contenente tutti i dati come array C."""
+    with open(header_path, 'w') as f:
+        f.write(f"#ifndef TCN_WEIGHTS_{dtype.upper()}_H\n")
+        f.write(f"#define TCN_WEIGHTS_{dtype.upper()}_H\n\n")
+
+        f.write("#include <stdint.h>\n\n")
+
+        c_type = {
+            'float32': 'float',
+            'int32': 'int32_t',
+            'int16': 'int16_t',
+            'int8': 'int8_t'
+        }[dtype]
+
+        for key, data in data_dict.items():
+            flat_data = data.flatten()
+            f.write(f"static const {c_type} {key}[] = {{\n")
+
+            for i, value in enumerate(flat_data):
+                if i % 8 == 0:  # 8 valori per riga per leggibilità
+                    f.write("    ")
+                f.write(f"{value}, ")
+                if (i + 1) % 8 == 0:
+                    f.write("\n")
+
+            f.write("\n};\n\n")
+
+        f.write(f"#endif // TCN_WEIGHTS_{dtype.upper()}_H\n")
+
+def export_reference_input_output(input_data, output_data, header_path, dtype):
+    """Genera un file .h contenente input e output di riferimento."""
+    with open(header_path, 'w') as f:
+        f.write(f"#ifndef TCN_IO_REF_{dtype.upper()}_H\n")
+        f.write(f"#define TCN_IO_REF_{dtype.upper()}_H\n\n")
+
+        f.write("#include <stdint.h>\n\n")
+
+        c_type = {
+            'float32': 'float',
+            'int32': 'int32_t',
+            'int16': 'int16_t',
+            'int8': 'int8_t'
+        }[dtype]
+
+        # Scrivi l'input di riferimento
+        f.write(f"static const {c_type} INPUT_REF[{input_data.size}] = {{\n")
+        flat_input = input_data.flatten()
+        for i, value in enumerate(flat_input):
+            if i % 8 == 0:
+                f.write("    ")
+            f.write(f"{value}, ")
+            if (i + 1) % 8 == 0:
+                f.write("\n")
+        f.write("\n};\n\n")
+
+        # Scrivi l'output di riferimento
+        f.write(f"static const {c_type} OUTPUT_REF[{output_data.size}] = {{\n")
+        for i, value in enumerate(output_data):
+            if i % 8 == 0:
+                f.write("    ")
+            f.write(f"{value}, ")
+            if (i + 1) % 8 == 0:
+                f.write("\n")
+        f.write("\n};\n\n")
+
+        f.write(f"#endif // TCN_IO_REF_{dtype.upper()}_H\n")
+
+def export_tcn_weights_and_refs(model, input_data, output_data, output_dir, scales):
+    dtypes = [(np.float32, 'float32'), (np.int32, 'int32'), (np.int16, 'int16'), (np.int8, 'int8')]
+
+    for dtype, dtype_name in dtypes:
+        dtype_folder = os.path.join(output_dir, dtype_name)
+        os.makedirs(dtype_folder, exist_ok=True)
+
+        data_dict = {}
+
+        for i, layer in enumerate(model.layers):
+            w = layer.conv.weight.data.cpu().numpy()
+            b = layer.conv.bias.data.cpu().numpy()
+
+            # Quantizza pesi e bias
+            quantized_w = quantize_data(w, dtype, scales[dtypes.index((dtype, dtype_name))])
+            quantized_b = quantize_data(b, dtype, scales[dtypes.index((dtype, dtype_name))])
+
+            # Aggiungi i dati al dizionario
+            data_dict[f"layer{i}_weights"] = quantized_w
+            data_dict[f"layer{i}_biases"] = quantized_b
+
+        # Genera un singolo header file per questa precisione
+        header_path = os.path.join(dtype_folder, f"tcn_weights_{dtype_name}.h")
+        generate_header_file(data_dict, header_path, dtype_name)
+
+        # Genera file per input/output di riferimento
+        ref_header_path = os.path.join(dtype_folder, f"tcn_input_output_ref.h")
+        quantized_input = quantize_data(input_data, dtype, scales[dtypes.index((dtype, dtype_name))])
+        quantized_output = quantize_data(output_data, dtype, scales[dtypes.index((dtype, dtype_name))])
+        export_reference_input_output(quantized_input, quantized_output, ref_header_path, dtype_name)
+
+    print(f"Header files unificati e input/output di riferimento esportati in {output_dir}.")
+
 
 # Parametri predefiniti
 file_path = "../NYC_Weather_2016_2022.csv"
@@ -224,10 +327,21 @@ num_layers = 3
 tcn_model = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, kernel_size=kernel_size, num_layers=num_layers)
 
 # Addestramento modello TCN
-trained_tcn, _, _ = train_model(tcn_model, train_loader, val_loader, epochs=100, patience=100, learning_rate=1e-3)
+best_model_path = "best_model_TCN.pth"
+force_train = False  # Imposta a True per forzare il training
+
+if os.path.exists(best_model_path) and not force_train:
+    print(f"Caricamento del modello pre-addestrato da {best_model_path}.")
+    tcn_model.load_state_dict(torch.load(best_model_path))
+    tcn_model.eval()
+else:
+    print("Inizio training del modello...")
+    tcn_model, _, _ = train_model(tcn_model, train_loader, val_loader, epochs=100, patience=10, learning_rate=1e-3)
+    torch.save(tcn_model.state_dict(), best_model_path)
+    print(f"Modello addestrato e salvato in {best_model_path}.")
 
 # Test del modello TCN
-tcn_predictions, tcn_actuals, tcn_inf_time = test_model(trained_tcn, test_loader)
+tcn_predictions, tcn_actuals, tcn_inf_time = test_model(tcn_model, test_loader)
 tcn_rmse = calculate_rmse(tcn_predictions, tcn_actuals)
 
 print(f"\n> RMSE TCN: {tcn_rmse:.4f}")
@@ -243,8 +357,8 @@ plt.title("Predictions TCN")
 plt.show()
 
 # Esportazione modello TCN in ONNX
-dummy_input = torch.randn(1, input_dim, SEQUENCE_LENGTH).to(device)
-torch.onnx.export(trained_tcn, dummy_input, "tcn_model.onnx", verbose=True)
+# dummy_input = torch.randn(1, input_dim, SEQUENCE_LENGTH).to(device)
+# torch.onnx.export(tcn_model, dummy_input, "tcn_model.onnx", verbose=True)
 
 # Ricarichiamo il best model TCN
 best_tcn = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, kernel_size=kernel_size, num_layers=num_layers)
@@ -272,5 +386,10 @@ os.makedirs(output_dir, exist_ok=True)
 
 save_quantized_data(torch_input.cpu().numpy(), input_dir, [np.float32, np.int32, np.int16, np.int8], scales)
 save_quantized_data(py_output, output_dir, [np.float32, np.int32, np.int16, np.int8], scales)
+
+output_dir = "data_headers"
+
+# Genera un input di test e calcola l'output di riferimento
+export_tcn_weights_and_refs(best_tcn, torch_input.cpu().numpy(), py_output, output_dir, scales)
 
 print("> Input e output di riferimento esportati con successo!")
