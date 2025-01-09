@@ -52,10 +52,6 @@ static dtype output[BATCH_SIZE][OUTPUT_DIM];
 static dtype intermediate_a[BATCH_SIZE][HIDDEN_DIM][TIME_LENGTH];
 static dtype intermediate_b[BATCH_SIZE][HIDDEN_DIM][TIME_LENGTH];
 
-// === LUT for ReLU ===
-#define LUT_SIZE 256
-static dtype relu_lut[LUT_SIZE];
-
 // === Function Prototypes ===
 void initialize_input();
 void inference();
