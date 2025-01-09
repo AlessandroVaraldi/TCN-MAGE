@@ -328,11 +328,11 @@ tcn_model = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_di
 
 # Addestramento modello TCN
 best_model_path = "best_model_TCN.pth"
-force_train = False  # Imposta a True per forzare il training
+force_train = True  # Imposta a True per forzare il training
 
 if os.path.exists(best_model_path) and not force_train:
     print(f"Caricamento del modello pre-addestrato da {best_model_path}.")
-    tcn_model.load_state_dict(torch.load(best_model_path))
+    tcn_model.load_state_dict(torch.load(best_model_path, weights_only=True))
     tcn_model.eval()
 else:
     print("Inizio training del modello...")
@@ -362,7 +362,7 @@ plt.show()
 
 # Ricarichiamo il best model TCN
 best_tcn = TCN(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, kernel_size=kernel_size, num_layers=num_layers)
-best_tcn.load_state_dict(torch.load("best_model_TCN.pth", map_location=device))
+best_tcn.load_state_dict(torch.load("best_model_TCN.pth", map_location=device, weights_only=True))
 best_tcn.eval()
 
 # Esporta i pesi per il codice C
