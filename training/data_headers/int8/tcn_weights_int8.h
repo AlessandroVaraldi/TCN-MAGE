@@ -4,30 +4,30 @@
 #include <stdint.h>
 
 static const int8_t layer0_weights[] = {
-    -4, 3, 2, 0, -1, -4, 1, -3, 
-    0, -4, 0, 0, 9, 0, 2, 0, 
-    0, 0, -31, -28, -35, 0, -1, 0
+    6, -4, 0, 0, 0, 0, -20, -7, 
+    -40, 0, 11, -11, 16, -9, -4, 0, 
+    0, 0, -21, -28, -38, 0, -10, 9
 };
 
 static const int8_t layer0_biases[] = {
-    0, 8
+    -15, 52
 };
 
 static const int8_t layer1_weights[] = {
-    0, 0, 0, 0, 0, 0, 4, 4, 
-    -2, -8, 2, 4
+    0, -1, -3, 0, -1, -2, -2, -5, 
+    -4, -2, -4, -4
 };
 
 static const int8_t layer1_biases[] = {
-    50, 0
+    64, 40
 };
 
 static const int8_t layer2_weights[] = {
-    1, 13, 43, -3, -4, -10
+    1, 3, 27, -3, 9, 23
 };
 
 static const int8_t layer2_biases[] = {
-    29
+    93
 };
 
 #endif // TCN_WEIGHTS_INT8_H

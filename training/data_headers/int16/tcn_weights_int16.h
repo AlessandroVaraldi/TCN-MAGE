@@ -4,30 +4,30 @@
 #include <stdint.h>
 
 static const int16_t layer0_weights[] = {
-    -74, 54, 45, -11, -20, -65, 20, -55, 
-    -10, -68, 0, 8, 145, -6, 39, -3, 
-    0, -1, -509, -458, -563, 12, -31, 15
+    101, -68, -8, -1, -3, 4, -331, -120, 
+    -642, 1, 176, -177, 266, -157, -72, -4, 
+    1, -3, -343, -450, -615, 5, -164, 155
 };
 
 static const int16_t layer0_biases[] = {
-    5, 136
+    -247, 840
 };
 
 static const int16_t layer1_weights[] = {
-    -2, 9, 5, -8, -3, 0, 65, 71, 
-    -33, -132, 33, 79
+    0, -18, -54, 0, -18, -33, -39, -93, 
+    -77, -43, -79, -73
 };
 
 static const int16_t layer1_biases[] = {
-    801, 1
+    1031, 653
 };
 
 static const int16_t layer2_weights[] = {
-    18, 221, 698, -52, -67, -161
+    18, 54, 441, -52, 153, 382
 };
 
 static const int16_t layer2_biases[] = {
-    464
+    1492
 };
 
 #endif // TCN_WEIGHTS_INT16_H

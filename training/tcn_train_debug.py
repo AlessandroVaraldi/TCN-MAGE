@@ -303,6 +303,68 @@ def export_tcn_weights_and_refs(model, input_data, output_data, output_dir, scal
         export_reference_input_output(quantized_input, quantized_output, ref_header_path, dtype_name)
 
     print(f"Header files unificati e input/output di riferimento esportati in {output_dir}.")
+    
+def export_tcn_weights_combined(model, output_dir, scales):
+    """Esporta pesi e bias in un unico array ordinato per layer e canale."""
+    dtypes = [(np.float32, 'float32'), (np.int32, 'int32'), (np.int16, 'int16'), (np.int8, 'int8')]
+
+    for dtype, dtype_name in dtypes:
+        dtype_folder = os.path.join(output_dir, dtype_name)
+        os.makedirs(dtype_folder, exist_ok=True)
+
+        combined_weights = []
+        combined_biases = []
+
+        for i, layer in enumerate(model.layers):
+            # Ottieni pesi e bias dal layer
+            w = layer.conv.weight.data.cpu().numpy()
+            b = layer.conv.bias.data.cpu().numpy()
+
+            # Quantizza i pesi e bias
+            quantized_w = quantize_data(w, dtype, scales[dtypes.index((dtype, dtype_name))])
+            quantized_b = quantize_data(b, dtype, scales[dtypes.index((dtype, dtype_name))])
+
+            # Appendi i pesi e bias all'array combinato
+            combined_weights.append(quantized_w.flatten())
+            combined_biases.append(quantized_b.flatten())
+
+        # Unisci tutti i pesi e bias in un unico array
+        combined_array = np.concatenate(combined_weights + combined_biases)
+
+        # Salva il file header
+        header_path = os.path.join(dtype_folder, f"tcn_weights_and_biases_{dtype_name}.h")
+        generate_combined_header_file(combined_array, header_path, dtype_name)
+
+    print(f"Tutti i pesi e bias esportati in formato combinato in {output_dir}.")
+
+def generate_combined_header_file(data, header_path, dtype_name):
+    """Genera un file header unico per tutti i pesi e bias."""
+    with open(header_path, 'w') as f:
+        f.write(f"#ifndef TCN_WEIGHTS_BIASES_{dtype_name.upper()}_H\n")
+        f.write(f"#define TCN_WEIGHTS_BIASES_{dtype_name.upper()}_H\n\n")
+
+        f.write("#include <stdint.h>\n\n")
+
+        c_type = {
+            'float32': 'float',
+            'int32': 'int32_t',
+            'int16': 'int16_t',
+            'int8': 'int8_t'
+        }[dtype_name]
+
+        f.write(f"static const {c_type} TCN_WEIGHTS_BIASES[] = {{\n")
+
+        for i, value in enumerate(data):
+            if i % 8 == 0 and i > 0:
+                f.write("\n    ")
+            elif i == 0:
+                f.write("    ")
+            f.write(f"{value}")
+            if i < len(data) - 1:  # Evita la virgola dopo l'ultimo elemento
+                f.write(", ")
+        f.write("\n};\n\n")
+
+        f.write(f"#endif // TCN_WEIGHTS_BIASES_{dtype_name.upper()}_H\n")
 
 # Parametri predefiniti
 file_path = "../NYC_Weather_2016_2022.csv"
@@ -400,3 +462,5 @@ output_dir = "data_headers"
 export_tcn_weights_and_refs(best_tcn, torch_input.cpu().numpy(), py_output, output_dir, scales)
 
 print("> Input e output di riferimento esportati con successo!")
+
+export_tcn_weights_combined(best_tcn, "output_directory", [1.0, (2**16), (2**8), (2**4)])

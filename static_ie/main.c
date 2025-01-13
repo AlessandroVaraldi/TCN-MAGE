@@ -18,7 +18,7 @@
 #define KERNEL_SIZE 3
 #define BATCH_SIZE  1
 #define TIME_LENGTH 8
-#define PRECISION   PRECISION_INT16
+#define PRECISION   PRECISION_FLOAT32
 
 // === Macros ===
 #define SCALE ((PRECISION == PRECISION_FLOAT32) ? 1 : \
@@ -27,19 +27,19 @@
               (PRECISION == PRECISION_INT32)  ? (1 << 16) : 1)
 
 #if PRECISION == PRECISION_FLOAT32
-    #include "tcn_weights_float32.h"
+    #include "tcn_weights_and_biases_float32.h"
     #include "tcn_input_output_float32.h"
     typedef float dtype;
 #elif PRECISION == PRECISION_INT8
-    #include "tcn_weights_int8.h"
+    #include "tcn_weights_and_biases_int8.h"
     #include "tcn_input_output_int8.h"
     typedef int8_t dtype;
 #elif PRECISION == PRECISION_INT16
-    #include "tcn_weights_int16.h"
+    #include "tcn_weights_and_biases_int16.h"
     #include "tcn_input_output_int16.h"
     typedef int16_t dtype;
 #elif PRECISION == PRECISION_INT32
-    #include "tcn_weights_int32.h"
+    #include "tcn_weights_and_biases_int32.h"
     #include "tcn_input_output_int32.h"
     typedef int32_t dtype;
 #else
@@ -72,25 +72,20 @@ void inference() {
     dtype (*current_buffer)[HIDDEN_DIM][TIME_LENGTH] = intermediate_a;
     dtype (*next_buffer)[HIDDEN_DIM][TIME_LENGTH] = intermediate_b;
 
+    int weight_offset = 0;
+    int bias_offset = 0;
+
     for (int layer = 0; layer < NUM_LAYERS; ++layer) {
         int dilation = (layer == 0) ? 1 : (1 << layer);
-
-        const dtype *current_weights;
-        const dtype *current_bias;
 
         int input_dim = (layer == 0) ? INPUT_DIM : HIDDEN_DIM;
         int output_dim = (layer == NUM_LAYERS - 1) ? OUTPUT_DIM : HIDDEN_DIM;
 
-        if (layer == 0) {
-            current_weights = (const dtype *)layer0_weights;
-            current_bias = layer0_biases;
-        } else if (layer == NUM_LAYERS - 1) {
-            current_weights = (const dtype *)layer2_weights;
-            current_bias = layer2_biases;
-        } else {
-            current_weights = (const dtype *)layer1_weights;
-            current_bias = layer1_biases;
-        }
+        const dtype *current_weights = &TCN_WEIGHTS_BIASES[weight_offset];
+        const dtype *current_bias = &TCN_WEIGHTS_BIASES[bias_offset];
+
+        weight_offset += output_dim * input_dim * KERNEL_SIZE;
+        bias_offset += output_dim;
 
         for (int batch = 0; batch < BATCH_SIZE; ++batch) {
             for (int time = 0; time < TIME_LENGTH; ++time) {
@@ -141,7 +136,7 @@ void compare_output() {
 
     for (int b = 0; b < BATCH_SIZE; ++b) {
         for (int o = 0; o < OUTPUT_DIM; ++o) {
-            printf("Output C: %d, Output Python: %d\n", output[b][o] / SCALE, reference_output[b][o] / SCALE);
+            printf("Output C: %f, Output Python: %f\n", output[b][o] / SCALE, reference_output[b][o] / SCALE);
 
             if (abs(output[b][o] - reference_output[b][o]) > 1) {
                 printf("Discrepanza trovata!\n");
