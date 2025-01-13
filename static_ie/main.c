@@ -11,36 +11,31 @@
 #define PRECISION_INT32   4
 
 // === Network Parameters ===
-#define INPUT_DIM   4
-#define OUTPUT_DIM  1
-#define HIDDEN_DIM  2
-#define NUM_LAYERS  3
-#define KERNEL_SIZE 3
+#include "tcn_network_params.h"
 #define BATCH_SIZE  1
-#define TIME_LENGTH 8
 #define PRECISION   PRECISION_FLOAT32
 
 // === Macros ===
 #define SCALE ((PRECISION == PRECISION_FLOAT32) ? 1 : \
-              (PRECISION == PRECISION_INT8)   ? (1 << 4) : \
-              (PRECISION == PRECISION_INT16)  ? (1 << 8) : \
-              (PRECISION == PRECISION_INT32)  ? (1 << 16) : 1)
+              (PRECISION == PRECISION_INT8)   ? (1 << FIXED_POINT/4) : \
+              (PRECISION == PRECISION_INT16)  ? (1 << FIXED_POINT/2) : \
+              (PRECISION == PRECISION_INT32)  ? (1 << FIXED_POINT) : 1)
 
 #if PRECISION == PRECISION_FLOAT32
-    #include "tcn_weights_and_biases_float32.h"
-    #include "tcn_input_output_float32.h"
+    #include "float32/tcn_weights_and_biases_float32.h"
+    #include "float32/tcn_input_output_float32.h"
     typedef float dtype;
 #elif PRECISION == PRECISION_INT8
-    #include "tcn_weights_and_biases_int8.h"
-    #include "tcn_input_output_int8.h"
+    #include "int8/tcn_weights_and_biases_int8.h"
+    #include "int8/tcn_input_output_int8.h"
     typedef int8_t dtype;
 #elif PRECISION == PRECISION_INT16
-    #include "tcn_weights_and_biases_int16.h"
-    #include "tcn_input_output_int16.h"
+    #include "int16/tcn_weights_and_biases_int16.h"
+    #include "int16/tcn_input_output_int16.h"
     typedef int16_t dtype;
 #elif PRECISION == PRECISION_INT32
-    #include "tcn_weights_and_biases_int32.h"
-    #include "tcn_input_output_int32.h"
+    #include "int32/tcn_weights_and_biases_int32.h"
+    #include "int32/tcn_input_output_int32.h"
     typedef int32_t dtype;
 #else
     #error "Tipo di precisione non supportato!"
@@ -73,7 +68,13 @@ void inference() {
     dtype (*next_buffer)[HIDDEN_DIM][TIME_LENGTH] = intermediate_b;
 
     int weight_offset = 0;
+
     int bias_offset = 0;
+    bias_offset += HIDDEN_DIM * INPUT_DIM * KERNEL_SIZE;
+    for (int layer = 0; layer < NUM_LAYERS - 2; ++layer) {
+        bias_offset += HIDDEN_DIM * HIDDEN_DIM * KERNEL_SIZE;
+    }
+    bias_offset += HIDDEN_DIM * OUTPUT_DIM * KERNEL_SIZE;
 
     for (int layer = 0; layer < NUM_LAYERS; ++layer) {
         int dilation = (layer == 0) ? 1 : (1 << layer);
@@ -85,7 +86,6 @@ void inference() {
         const dtype *current_bias = &TCN_WEIGHTS_BIASES[bias_offset];
 
         weight_offset += output_dim * input_dim * KERNEL_SIZE;
-        bias_offset += output_dim;
 
         for (int batch = 0; batch < BATCH_SIZE; ++batch) {
             for (int time = 0; time < TIME_LENGTH; ++time) {
@@ -107,7 +107,7 @@ void inference() {
                     result += current_bias[o];
 
                     if (layer != NUM_LAYERS - 1 && result < 0) {
-                        result = (result > 0) ? result : 0; // Calcolo diretto
+                        result = (result > 0) ? result : 0;
                     }
 
                     if (layer == NUM_LAYERS - 1) {
@@ -119,6 +119,8 @@ void inference() {
             }
         }
 
+        bias_offset += output_dim;
+
         dtype (*temp)[HIDDEN_DIM][TIME_LENGTH] = current_buffer;
         current_buffer = next_buffer;
         next_buffer = temp;
@@ -127,6 +129,8 @@ void inference() {
 
 void compare_output() {
     dtype reference_output[BATCH_SIZE][OUTPUT_DIM];
+    dtype current_output;
+    dtype current_reference_output;
 
     for (int i = 0; i < BATCH_SIZE; ++i) {
         for (int j = 0; j < OUTPUT_DIM; ++j) {
@@ -136,9 +140,17 @@ void compare_output() {
 
     for (int b = 0; b < BATCH_SIZE; ++b) {
         for (int o = 0; o < OUTPUT_DIM; ++o) {
-            printf("Output C: %f, Output Python: %f\n", output[b][o] / SCALE, reference_output[b][o] / SCALE);
 
-            if (abs(output[b][o] - reference_output[b][o]) > 1) {
+            current_output = output[b][o] / SCALE;
+            current_reference_output = reference_output[b][o] / SCALE;
+
+            if (PRECISION == PRECISION_FLOAT32) {
+                printf("Output C: %f, Output Python: %f\n", (float)current_output, (float)current_reference_output);
+            } else {
+                printf("Output C: %d, Output Python: %d\n", (int)current_output, (int)current_reference_output);
+            }
+
+            if (abs(current_output - current_reference_output) > 1) {
                 printf("Discrepanza trovata!\n");
                 return;
             }
