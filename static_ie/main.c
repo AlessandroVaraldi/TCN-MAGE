@@ -13,6 +13,7 @@
 // === Network Parameters ===
 #include "tcn_network_params.h"
 #define BATCH_SIZE  1
+
 #define PRECISION   PRECISION_FLOAT32
 
 // === Macros ===
@@ -21,31 +22,34 @@
               (PRECISION == PRECISION_INT16)  ? (1 << FIXED_POINT/2) : \
               (PRECISION == PRECISION_INT32)  ? (1 << FIXED_POINT) : 1)
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 #if PRECISION == PRECISION_FLOAT32
-    #include "float32/tcn_weights_and_biases_float32.h"
-    #include "float32/tcn_input_output_float32.h"
+    #include "float32/weights_bias_float32.h"
+    #include "float32/input_output_float32.h"
     typedef float dtype;
 #elif PRECISION == PRECISION_INT8
-    #include "int8/tcn_weights_and_biases_int8.h"
-    #include "int8/tcn_input_output_int8.h"
+    #include "int8/weights_bias_int8.h"
+    #include "int8/input_output_int8.h"
     typedef int8_t dtype;
 #elif PRECISION == PRECISION_INT16
-    #include "int16/tcn_weights_and_biases_int16.h"
-    #include "int16/tcn_input_output_int16.h"
+    #include "int16/weights_bias_int16.h"
+    #include "int16/input_output_int16.h"
     typedef int16_t dtype;
 #elif PRECISION == PRECISION_INT32
-    #include "int32/tcn_weights_and_biases_int32.h"
-    #include "int32/tcn_input_output_int32.h"
+    #include "int32/weights_bias_int32.h"
+    #include "int32/input_output_int32.h"
     typedef int32_t dtype;
 #else
     #error "Tipo di precisione non supportato!"
 #endif
 
+
 // === Static Buffers ===
 static dtype input[BATCH_SIZE][INPUT_DIM][TIME_LENGTH];
-static dtype output[BATCH_SIZE][OUTPUT_DIM];
-static dtype intermediate_a[BATCH_SIZE][HIDDEN_DIM][TIME_LENGTH];
-static dtype intermediate_b[BATCH_SIZE][HIDDEN_DIM][TIME_LENGTH];
+static dtype output[BATCH_SIZE][NUM_CLASSES];
+static dtype intermediate_a[BATCH_SIZE][MAX_HIDDEN_DIM][TIME_LENGTH];
+static dtype intermediate_b[BATCH_SIZE][MAX_HIDDEN_DIM][TIME_LENGTH];
 
 // === Function Prototypes ===
 void initialize_input();
@@ -57,107 +61,168 @@ void initialize_input() {
     for (int i = 0; i < BATCH_SIZE; ++i) {
         for (int j = 0; j < INPUT_DIM; ++j) {
             for (int k = 0; k < TIME_LENGTH; ++k) {
-                input[i][j][k] = INPUT_REF[i * INPUT_DIM * TIME_LENGTH + j * TIME_LENGTH + k];
+                input[i][j][k] = REF_INPUT[i * INPUT_DIM * TIME_LENGTH + j * TIME_LENGTH + k];
             }
         }
     }
 }
 
 void inference() {
-    dtype (*current_buffer)[HIDDEN_DIM][TIME_LENGTH] = intermediate_a;
-    dtype (*next_buffer)[HIDDEN_DIM][TIME_LENGTH] = intermediate_b;
+    dtype (*current_buffer)[MAX_HIDDEN_DIM][TIME_LENGTH] = intermediate_a;
+    dtype (*next_buffer)[MAX_HIDDEN_DIM][TIME_LENGTH] = intermediate_b;
 
     int weight_offset = 0;
-
     int bias_offset = 0;
-    bias_offset += HIDDEN_DIM * INPUT_DIM * KERNEL_SIZE;
-    for (int layer = 0; layer < NUM_LAYERS - 2; ++layer) {
-        bias_offset += HIDDEN_DIM * HIDDEN_DIM * KERNEL_SIZE;
+
+    // Compute bias offset
+    for (int i = 0; i < NUM_LAYERS; ++i) {
+        if (i == 0) {
+            bias_offset += INPUT_DIM * HIDDEN_DIMS[i] * KERNEL_SIZES[i];
+        } else {
+            bias_offset += HIDDEN_DIMS[i - 1] * HIDDEN_DIMS[i] * KERNEL_SIZES[i];
+        }
     }
-    bias_offset += HIDDEN_DIM * OUTPUT_DIM * KERNEL_SIZE;
 
-    for (int layer = 0; layer < NUM_LAYERS; ++layer) {
-        int dilation = (layer == 0) ? 1 : (1 << layer);
+    int num_layers = NUM_LAYERS;
 
-        int input_dim = (layer == 0) ? INPUT_DIM : HIDDEN_DIM;
-        int output_dim = (layer == NUM_LAYERS - 1) ? OUTPUT_DIM : HIDDEN_DIM;
+    int time_length = TIME_LENGTH;
 
-        const dtype *current_weights = &TCN_WEIGHTS_BIASES[weight_offset];
-        const dtype *current_bias = &TCN_WEIGHTS_BIASES[bias_offset];
+    for (int layer = 0; layer < num_layers; ++layer) {
+        int input_dim = (layer == 0) ? INPUT_DIM : HIDDEN_DIMS[layer - 1];
+        int output_dim = HIDDEN_DIMS[layer];
+        int kernel_size = KERNEL_SIZES[layer];
+        int dilation = DILATIONS[layer];
 
-        weight_offset += output_dim * input_dim * KERNEL_SIZE;
+        const dtype *current_weights = &WEIGHTS_BIAS[weight_offset];
+        const dtype *current_bias = &WEIGHTS_BIAS[bias_offset];
 
-        for (int batch = 0; batch < BATCH_SIZE; ++batch) {
-            for (int time = 0; time < TIME_LENGTH; ++time) {
-                for (int o = 0; o < output_dim; ++o) {
+        // Update offsets
+        weight_offset += input_dim * output_dim * kernel_size;
+        bias_offset += output_dim;
+
+        // Apply causal convolution
+        for (int b = 0; b < BATCH_SIZE; ++b) {
+            for (int out = 0; out < output_dim; ++out) {
+                for (int t = 0; t < time_length; ++t) {
                     dtype result = 0;
-
-                    for (int i = 0; i < input_dim; ++i) {
-                        for (int k = 0; k < KERNEL_SIZE; ++k) {
-                            int weight_index = o * input_dim * KERNEL_SIZE + i * KERNEL_SIZE + k;
-                            int input_time = time - (KERNEL_SIZE - 1 - k) * dilation;
-
-                            if (input_time >= 0 && input_time < TIME_LENGTH) {
-                                dtype input_value = (layer == 0) ? input[batch][i][input_time] : current_buffer[batch][i][input_time];
-                                result += current_weights[weight_index] * input_value / SCALE;
+                    for (int in = 0; in < input_dim; ++in) {
+                        for (int k = 0; k < kernel_size; ++k) {
+                            int index = t - (kernel_size - 1 - k)* dilation;
+                            if (index >= 0 && index < time_length) {
+                                dtype input_value = (layer == 0) ? input[b][in][index] : current_buffer[b][in][index];
+                                result += current_weights[out * input_dim * kernel_size + in * kernel_size + k] * input_value / SCALE;
                             }
                         }
                     }
+                    result += current_bias[out];
+                    next_buffer[b][out][t] = result;
+                }
+            }
+        }
 
-                    result += current_bias[o];
-
-                    if (layer != NUM_LAYERS - 1 && result < 0) {
-                        result = (result > 0) ? result : 0;
-                    }
-
-                    if (layer == NUM_LAYERS - 1) {
-                        output[batch][o] = result;
-                    } else {
-                        next_buffer[batch][o][time] = result;
+        // Apply ReLU if enabled
+        if (RELU_FLAGS[layer]) {
+            for (int b = 0; b < BATCH_SIZE; ++b) {
+                for (int out = 0; out < output_dim; ++out) {
+                    for (int t = 0; t < time_length; ++t) {
+                        next_buffer[b][out][t] = next_buffer[b][out][t] > 0 ? next_buffer[b][out][t] : 0;
                     }
                 }
             }
         }
 
-        bias_offset += output_dim;
+        // Apply MaxPool if enabled
+        if (MAXPOOL_FLAGS[layer]) {
+            time_length = time_length / 2;
+            for (int b = 0; b < BATCH_SIZE; ++b) {
+                for (int out = 0; out < output_dim; ++out) {
+                    for (int t = 0; t < time_length; ++t) {
+                        dtype max_val = next_buffer[b][out][2 * t];
+                        if (2 * t + 1 < TIME_LENGTH) {
+                            max_val = MAX(max_val, next_buffer[b][out][2 * t + 1]);
+                        }
+                        next_buffer[b][out][t] = max_val;
+                    }
+                }
+            }
+        }
 
-        dtype (*temp)[HIDDEN_DIM][TIME_LENGTH] = current_buffer;
-        current_buffer = next_buffer;
-        next_buffer = temp;
+        // Apply GAP if enabled
+        if (GAP_FLAGS[layer]) {
+            for (int b = 0; b < BATCH_SIZE; ++b) {
+                for (int out = 0; out < output_dim; ++out) {
+                    dtype sum = 0;
+                    for (int t = 0; t < time_length; ++t) {
+                        sum += next_buffer[b][out][t];
+                    }
+                    next_buffer[b][out][0] = sum / time_length;
+                }
+            }
+        }
+
+        // Apply Softmax if enabled
+        if (SOFTMAX_FLAGS[layer]) {
+            for (int b = 0; b < BATCH_SIZE; ++b) {
+                for (int t = 0; t < time_length; ++t) {
+                    dtype sum = 0;
+                    for (int out = 0; out < output_dim; ++out) {
+                        next_buffer[b][out][t] = exp(next_buffer[b][out][t]);
+                        sum += next_buffer[b][out][t];
+                    }
+                    for (int out = 0; out < output_dim; ++out) {
+                        next_buffer[b][out][t] /= sum;
+                    }
+                }
+            }
+        }
+
+        // Swap buffers
+        if (layer < num_layers - 1) {
+            dtype (*temp)[MAX_HIDDEN_DIM][TIME_LENGTH] = current_buffer;
+            current_buffer = next_buffer;
+            next_buffer = temp;
+        }
+    }
+
+    // Write final output
+    for (int b = 0; b < BATCH_SIZE; ++b) {
+        for (int out = 0; out < NUM_CLASSES; ++out) {
+            output[b][out] = next_buffer[b][out][0];
+        }
     }
 }
 
+
 void compare_output() {
-    dtype reference_output[BATCH_SIZE][OUTPUT_DIM];
+    dtype reference_output[BATCH_SIZE][NUM_CLASSES];
     dtype current_output;
     dtype current_reference_output;
 
     for (int i = 0; i < BATCH_SIZE; ++i) {
-        for (int j = 0; j < OUTPUT_DIM; ++j) {
-            reference_output[i][j] = OUTPUT_REF[i * OUTPUT_DIM + j];
+        for (int j = 0; j < NUM_CLASSES; ++j) {
+            reference_output[i][j] = REF_OUTPUT[i * NUM_CLASSES + j];
         }
     }
 
     for (int b = 0; b < BATCH_SIZE; ++b) {
-        for (int o = 0; o < OUTPUT_DIM; ++o) {
-
-            current_output = output[b][o] / SCALE;
-            current_reference_output = reference_output[b][o] / SCALE;
+        for (int o = 0; o < NUM_CLASSES; ++o) {
+            current_output = output[b][o];
+            current_reference_output = reference_output[b][o];
 
             if (PRECISION == PRECISION_FLOAT32) {
-                printf("Output C: %f, Output Python: %f\n", (float)current_output, (float)current_reference_output);
+                printf("Output C: %f, Output Python: %f, ", (float)current_output, (float)current_reference_output);
             } else {
-                printf("Output C: %d, Output Python: %d\n", (int)current_output, (int)current_reference_output);
+                printf("Output C: %d, Output Python: %d, ", (int)current_output, (int)current_reference_output);
             }
 
-            if (abs(current_output - current_reference_output) > 1) {
+            if (fabs(current_output - current_reference_output) > 1) {
                 printf("Discrepanza trovata!\n");
-                return;
+            }
+            else {
+                printf("Risultati coerenti!\n");
             }
         }
     }
-
-    printf("I risultati coincidono!\n");
 }
 
 int main() {

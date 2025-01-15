@@ -1,0 +1,8 @@
+{
+    "sequence_length": 8,
+    "layers": [
+        {"hidden_dim": 2, "kernel_size": 2, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": true, "use_dropout": false, "dropout_prob": 0.3, "use_gap": false, "use_softmax": false},
+        {"hidden_dim": 2, "kernel_size": 2, "dilation": 2, "use_batchnorm": true, "use_relu": true, "use_maxpool": true, "use_dropout": false, "dropout_prob": 0.3, "use_gap": false, "use_softmax": false},
+        {"hidden_dim": 4, "kernel_size": 2, "dilation": 4, "use_batchnorm": true, "use_relu": true, "use_maxpool": true, "use_dropout": false, "dropout_prob": 0.3, "use_gap": false, "use_softmax": false}
+    ]
+}
