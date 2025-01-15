@@ -163,6 +163,7 @@ class Trainer:
         best_val_loss = float('inf')
         epochs_without_improvement = 0
         best_model_path = f'best_model_{type(self.model).__name__}.pth'
+        best_model_path = os.path.join('models/', best_model_path)
 
         plt.ion()
         fig, ax = plt.subplots()
@@ -487,16 +488,33 @@ print(tcn_model.describe())
 
 # Check per modello pre-addestrato
 Force_training = True
-model_path = "model/best_model_TCN.pth"
-if os.path.exists(model_path) and not Force_training:
-    print(f"Caricamento modello pre-addestrato da {model_path}.")
-    tcn_model.load_state_dict(torch.load(model_path, weights_only=True))
-    tcn_model.eval()
-else:
-    print("> Avvio del training...")
+Resume_training = True
+
+if Resume_training:
+    model_path = f'models/best_model_{type(tcn_model).__name__}.pth'
+    tcn_model.load_state_dict(torch.load(model_path, map_location=device))
+    tcn_model.train()
     trainer = Trainer(tcn_model, device, learning_rate=1e-3)
     trained_model, _, _ = trainer.train(train_loader, val_loader, epochs=1000, patience=100)
     torch.save(trained_model.state_dict(), model_path)
+elif Force_training:
+    model_path = f'models/best_model_{type(tcn_model).__name__}.pth'
+    if os.path.exists(model_path):
+        os.remove(model_path)
+    tcn_model.train()
+    trainer = Trainer(tcn_model, device, learning_rate=1e-3)
+    trained_model, _, _ = trainer.train(train_loader, val_loader, epochs=1000, patience=100)
+    torch.save(trained_model.state_dict(), model_path)
+else:
+    model_path = f'models/best_model_{type(tcn_model).__name__}.pth'
+    if os.path.exists(model_path):
+        tcn_model.load_state_dict(torch.load(model_path, map_location=device))
+    else:
+        tcn_model.train()
+        trainer = Trainer(tcn_model, device, learning_rate=1e-3)
+        trained_model, _, _ = trainer.train(train_loader, val_loader, epochs=10000, patience=1000)
+        torch.save(trained_model.state_dict(), model_path)
+    
 
 # Testing
 tcn_model.eval()

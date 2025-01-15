@@ -56,6 +56,19 @@ void initialize_input();
 void inference();
 void compare_output();
 
+int main() {
+    printf("Inizializzazione dell'input...\n");
+    initialize_input();
+
+    printf("Esecuzione dell'inferenza...\n");
+    inference();
+
+    printf("Confronto con output di riferimento...\n");
+    compare_output();
+
+    return 0;
+}
+
 // === Function Implementations ===
 void initialize_input() {
     for (int i = 0; i < BATCH_SIZE; ++i) {
@@ -102,8 +115,8 @@ void inference() {
 
         // Apply causal convolution
         for (int b = 0; b < BATCH_SIZE; ++b) {
-            for (int out = 0; out < output_dim; ++out) {
-                for (int t = 0; t < time_length; ++t) {
+            for (int t = 0; t < time_length; ++t) {
+                for (int out = 0; out < output_dim; ++out) {
                     dtype result = 0;
                     for (int in = 0; in < input_dim; ++in) {
                         for (int k = 0; k < kernel_size; ++k) {
@@ -214,7 +227,6 @@ void compare_output() {
             } else {
                 printf("Output C: %d, Output Python: %d, ", (int)current_output, (int)current_reference_output);
             }
-
             if (fabs(current_output - current_reference_output) > 1) {
                 printf("Discrepanza trovata!\n");
             }
@@ -223,17 +235,4 @@ void compare_output() {
             }
         }
     }
-}
-
-int main() {
-    printf("Inizializzazione dell'input...\n");
-    initialize_input();
-
-    printf("Esecuzione dell'inferenza...\n");
-    inference();
-
-    printf("Confronto con output di riferimento...\n");
-    compare_output();
-
-    return 0;
 }
