@@ -1,16 +1,15 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, classification_report, ConfusionMatrixDisplay
-from torch.utils.data import DataLoader, Dataset, random_split
-from tqdm import tqdm
-import time
 import os
 import json
+import torch
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from sklearn.metrics import confusion_matrix, classification_report, ConfusionMatrixDisplay
+from torch.utils.data import DataLoader, random_split
+from models.tcn import TCN, CausalConv1d
+from utils.TimeSeriesDataset import TimeSeriesDataset
+from utils.Trainer import Trainer
 
 # Verifica se CUDA è disponibile
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -21,42 +20,6 @@ seed = 5
 np.random.seed(seed)
 torch.manual_seed(seed)
 
-# --- Dataset Utilities ---
-class TimeSeriesDataset(Dataset):
-    def __init__(self, data, input_cols, output_col, sequence_length, num_classes=4):
-        self.X = torch.tensor(data[input_cols].values, dtype=torch.float32)
-        self.y, self.class_ranges = self._dynamic_encode_labels(data[output_col].values, num_classes)
-        self.sequence_length = sequence_length
-
-    def _dynamic_encode_labels(self, labels, num_classes):
-        """
-        Suddivide dinamicamente i valori delle etichette in classi bilanciate basate su quantili.
-
-        :param labels: Array dei valori target
-        :param num_classes: Numero di classi desiderate
-        :return: (Tensor delle etichette, range delle classi)
-        """
-        percentiles = np.linspace(0, 100, num_classes + 1)
-        bins = np.percentile(labels, percentiles)
-        class_ranges = [(bins[i], bins[i + 1]) for i in range(len(bins) - 1)]
-
-        encoded_labels = []
-        for label in labels:
-            for i, (lower, upper) in enumerate(class_ranges):
-                if lower <= label < upper or (i == len(class_ranges) - 1 and label == upper):
-                    encoded_labels.append(i)
-                    break
-
-        return torch.tensor(encoded_labels, dtype=torch.long), class_ranges
-
-    def __len__(self):
-        return len(self.X) - self.sequence_length + 1
-
-    def __getitem__(self, idx):
-        x_sequence = self.X[idx:idx + self.sequence_length].T
-        y_value = self.y[idx + self.sequence_length - 1]
-        return x_sequence, y_value
-
 class DataUtils:
     @staticmethod
     def check_and_clean_data(data, input_cols, output_col):
@@ -65,169 +28,6 @@ class DataUtils:
             print(f"\n> Avviso: trovati {nan_count} valori NaN nel dataset. Verranno rimossi automaticamente.\n")
             data = data.dropna(subset=input_cols + [output_col]).reset_index(drop=True)
         return data
-
-# --- Model Definitions ---
-class CausalConv1d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, dilation, use_batchnorm=False):
-        super(CausalConv1d, self).__init__()
-        self.kernel_size = kernel_size
-        self.dilation = dilation
-        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, padding=0, dilation=dilation)
-        self.batchnorm = nn.BatchNorm1d(out_channels) if use_batchnorm else None
-
-    def forward(self, x):
-        padding = (self.kernel_size - 1) * self.dilation
-        x = F.pad(x, (padding, 0))
-        out = self.conv(x)
-        if self.batchnorm:
-            out = self.batchnorm(out)
-        return out
-
-class TCN(nn.Module):
-    def __init__(self, input_dim, config_path):
-        super(TCN, self).__init__()
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-
-        self.layers = nn.ModuleList()
-        self.hidden_dims = []
-        self.kernel_sizes = []
-        self.dilations = []
-
-        prev_channels = input_dim
-
-        for layer_config in config['layers']:
-            hidden_dim = layer_config['hidden_dim']
-            kernel_size = layer_config['kernel_size']
-            dilation = layer_config['dilation']
-            use_batchnorm = layer_config.get('use_batchnorm', False)
-            use_relu = layer_config.get('use_relu', True)
-            use_maxpool = layer_config.get('use_maxpool', False)
-            use_dropout = layer_config.get('use_dropout', False)
-            dropout_prob = layer_config.get('dropout_prob', 0.0)
-            use_gap = layer_config.get('use_gap', False)
-            use_softmax = layer_config.get('use_softmax', False)
-
-            layer = nn.Sequential()
-            layer.add_module('conv', CausalConv1d(prev_channels, hidden_dim, kernel_size, dilation, use_batchnorm))
-            if use_relu:
-                layer.add_module('relu', nn.ReLU())
-            if use_maxpool:
-                layer.add_module('maxpool', nn.MaxPool1d(kernel_size=2))
-            if use_dropout:
-                layer.add_module('dropout', nn.Dropout(dropout_prob))
-            if use_gap:
-                layer.add_module('gap', nn.AdaptiveAvgPool1d(1))
-            if use_softmax:
-                layer.add_module('softmax', nn.Softmax(dim=1))
-
-            self.layers.append(layer)
-            self.hidden_dims.append(hidden_dim)
-            self.kernel_sizes.append(kernel_size)
-            self.dilations.append(dilation)
-            prev_channels = hidden_dim
-
-    def forward(self, x):
-        for layer in self.layers:
-            x = layer(x)
-        if x.size(1) > 1:
-            x = x.squeeze(-1)
-        return x
-    
-    def describe(self):
-        description = "> TCN Model Structure:\n"
-        for i, layer in enumerate(self.layers):
-            description += (f"  Layer {i}: "
-                            f"  hidden_dim={self.hidden_dims[i]}, "
-                            f"  kernel_size={self.kernel_sizes[i]}, "
-                            f"  dilation={self.dilations[i]}, "
-                            f"  batchnorm={'yes' if 'batchnorm' in layer._modules['conv']._modules else 'no'}, "
-                            f"  relu={'yes' if 'relu' in layer._modules else 'no'}, "
-                            f"  maxpool={'yes' if 'maxpool' in layer._modules else 'no'}, "
-                            f"  dropout={'yes' if 'dropout' in layer._modules else 'no'}, "
-                            f"  dropout_prob={layer._modules['dropout'].p if 'dropout' in layer._modules else 0}, "
-                            f"  gap={'yes' if 'gap' in layer._modules else 'no'}, "
-                            f"  softmax={'yes' if 'softmax' in layer._modules else 'no'}\n")
-        return description
-
-# --- Training Utilities ---
-class Trainer:
-    def __init__(self, model, device, learning_rate=1e-3):
-        self.model = model.to(device)
-        self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-        self.device = device
-
-    def train(self, train_loader, val_loader, epochs=1000, patience=50, threshold=1e-4):
-        train_losses, val_losses = [], []
-        best_val_loss = float('inf')
-        epochs_without_improvement = 0
-        best_model_path = f'best_model_{type(self.model).__name__}.pth'
-        best_model_path = os.path.join('models/', best_model_path)
-
-        plt.ion()
-        fig, ax = plt.subplots()
-
-        try:
-            for epoch in range(epochs):
-                train_loss = self._train_one_epoch(train_loader)
-                val_loss = self._validate_one_epoch(val_loader)
-
-                train_losses.append(train_loss)
-                val_losses.append(val_loss)
-
-                self._update_plot(ax, train_losses, val_losses, epoch)
-
-                if val_loss < best_val_loss - threshold:
-                    best_val_loss = val_loss
-                    epochs_without_improvement = 0
-                    torch.save(self.model.state_dict(), best_model_path)
-                    print(f"    Epoch {epoch+1}: Miglioramento della Validation Loss, modello salvato.")
-                else:
-                    epochs_without_improvement += 1
-
-                if epochs_without_improvement >= patience:
-                    print(f"\n> Early stopping: nessun miglioramento per {patience} epoche consecutive.\n")
-                    break
-        except KeyboardInterrupt:
-            print(f"\n> Training interrotto manualmente alla epoca {epoch}.\n")
-        plt.ioff()
-        plt.show()
-        return self.model, train_losses, val_losses
-
-    def _train_one_epoch(self, train_loader):
-        self.model.train()
-        total_loss = 0
-        for inputs, targets in train_loader:
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
-            self.optimizer.zero_grad()
-            outputs = self.model(inputs)
-            loss = self.criterion(outputs, targets)
-            loss.backward()
-            self.optimizer.step()
-            total_loss += loss.item()
-        return total_loss / len(train_loader)
-
-    def _validate_one_epoch(self, val_loader):
-        self.model.eval()
-        total_loss = 0
-        with torch.no_grad():
-            for inputs, targets in val_loader:
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
-                outputs = self.model(inputs)
-                total_loss += self.criterion(outputs, targets).item()
-        return total_loss / len(val_loader)
-
-    def _update_plot(self, ax, train_losses, val_losses, epoch):
-        ax.clear()
-        ax.plot(train_losses, label='Training Loss')
-        ax.plot(val_losses, label='Validation Loss')
-        ax.annotate(f'Epoch {epoch}', xy=(0.01, 0.01), xycoords='axes fraction', ha='left', va='bottom')
-        ax.set_xlabel('Epoch')
-        ax.set_ylabel('Loss')
-        ax.legend()
-        plt.draw()
-        plt.pause(0.01)
         
 # --- Export Utilities ---
 class Exporter:
@@ -463,7 +263,7 @@ data = pd.read_csv(file_path)
 data = DataUtils.check_and_clean_data(data, input_cols, output_col)
 
 # === Sequence Length ===
-config_path = "cfg/config1.json"
+config_path = "cfg/config2.json"
 with open(config_path, 'r') as f:
     config = json.load(f)
 sequence_length = config['sequence_length']
@@ -487,35 +287,34 @@ tcn_model = TCN(input_dim=input_dim, config_path=config_path).to(device)
 print(tcn_model.describe())
 
 # Check per modello pre-addestrato
-Force_training = True
-Resume_training = True
+model_path = f'checkpoints/best_{type(tcn_model).__name__}.pth'
 
-if Resume_training:
-    model_path = f'models/best_model_{type(tcn_model).__name__}.pth'
-    tcn_model.load_state_dict(torch.load(model_path, map_location=device))
+epochs = 1000
+patience = 50
+
+force_training = True
+resume_training = False
+
+def train_and_save_model():
     tcn_model.train()
     trainer = Trainer(tcn_model, device, learning_rate=1e-3)
-    trained_model, _, _ = trainer.train(train_loader, val_loader, epochs=1000, patience=100)
+    trained_model, _, _ = trainer.train(train_loader, val_loader, epochs=epochs, patience=patience)
     torch.save(trained_model.state_dict(), model_path)
-elif Force_training:
-    model_path = f'models/best_model_{type(tcn_model).__name__}.pth'
+
+if resume_training:
+    if os.path.exists(model_path):
+        tcn_model.load_state_dict(torch.load(model_path, map_location=device))
+    train_and_save_model()
+elif force_training:
     if os.path.exists(model_path):
         os.remove(model_path)
-    tcn_model.train()
-    trainer = Trainer(tcn_model, device, learning_rate=1e-3)
-    trained_model, _, _ = trainer.train(train_loader, val_loader, epochs=1000, patience=100)
-    torch.save(trained_model.state_dict(), model_path)
+    train_and_save_model()
 else:
-    model_path = f'models/best_model_{type(tcn_model).__name__}.pth'
     if os.path.exists(model_path):
         tcn_model.load_state_dict(torch.load(model_path, map_location=device))
     else:
-        tcn_model.train()
-        trainer = Trainer(tcn_model, device, learning_rate=1e-3)
-        trained_model, _, _ = trainer.train(train_loader, val_loader, epochs=10000, patience=1000)
-        torch.save(trained_model.state_dict(), model_path)
+        train_and_save_model()
     
-
 # Testing
 tcn_model.eval()
 predictions, actuals = [], []
@@ -573,4 +372,3 @@ Exporter.export_network_parameters(
     sequence_length=sequence_length,
     fixed_point=fixed_point
 )
-

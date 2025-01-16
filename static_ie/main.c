@@ -55,6 +55,7 @@ static dtype intermediate_b[BATCH_SIZE][MAX_HIDDEN_DIM][TIME_LENGTH];
 void initialize_input();
 void inference();
 void compare_output();
+void print_float_as_int(float number, int decimal_places);
 
 int main() {
     printf("Inizializzazione dell'input...\n");
@@ -222,17 +223,56 @@ void compare_output() {
             current_output = output[b][o];
             current_reference_output = reference_output[b][o];
 
-            if (PRECISION == PRECISION_FLOAT32) {
-                printf("Output C: %f, Output Python: %f, ", (float)current_output, (float)current_reference_output);
-            } else {
-                printf("Output C: %d, Output Python: %d, ", (int)current_output, (int)current_reference_output);
-            }
-            if (fabs(current_output - current_reference_output) > 1) {
-                printf("Discrepanza trovata!\n");
+            if(PRECISION != PRECISION_FLOAT32) {
+                printf("Output Python: %d, Output C: %d, ", current_reference_output, current_output);
+                if (abs(current_output - current_reference_output) > 1) {
+                    printf("Errore: i valori non corrispondono!\n");
+                }
+                else {
+                    printf("Valori corrispondenti.\n");
+                }
             }
             else {
-                printf("Risultati coerenti!\n");
+                printf("Output Python: ");
+                print_float_as_int((float)current_reference_output, 6);
+                printf(", Output C: ");
+                print_float_as_int((float)current_output, 6);
+                printf(", ");
+                if (fabs((float)current_output - (float)current_reference_output) > 1e-3) {
+                    printf("Errore: i valori non corrispondono!\n");
+                }
+                else {
+                    printf("Valori corrispondenti.\n");
+                }
             }
         }
+    }
+}
+
+void print_float_as_int(float number, int decimal_places) {
+    // Controllo del segno
+    if (number < 0) {
+        putchar('-');
+        number = -number;
+    }
+
+    // Separazione della parte intera e decimale
+    int32_t integer_part = (int32_t)number;
+    float decimal_part = number - (float)integer_part;
+
+    // Stampa della parte intera
+    printf("%d", integer_part);
+
+    if (decimal_places > 0) {
+        putchar('.'); // Stampa il punto decimale
+
+        // Calcolo della parte decimale come intero
+        for (int i = 0; i < decimal_places; i++) {
+            decimal_part *= 10;
+        }
+        int32_t decimal_digits = (int32_t)(decimal_part + 0.5f); // Approssimazione
+
+        // Stampa della parte decimale
+        printf("%0*d", decimal_places, decimal_digits); // Zeri iniziali per riempire fino al numero di cifre richieste
     }
 }
