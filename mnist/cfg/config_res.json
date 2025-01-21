@@ -1,0 +1,16 @@
+{
+    "sequence_length": 70,
+    "layers": [
+        {"layer_type": "standard", "hidden_dim": 64, "kernel_size": 8, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": false, "use_dropout": false, "dropout_prob": 0.0, "use_gap": false, "use_softmax": false},
+        {"layer_type": "residual", "hidden_dim": 64, "kernel_size": 8, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": false, "use_dropout": false, "dropout_prob": 0.0, "use_gap": false, "use_softmax": false},
+        {"layer_type": "residual", "hidden_dim": 64, "kernel_size": 8, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": false, "use_dropout": false, "dropout_prob": 0.0, "use_gap": false, "use_softmax": false},
+        {"layer_type": "residual", "hidden_dim": 64, "kernel_size": 8, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": false, "use_dropout": false, "dropout_prob": 0.0, "use_gap": false, "use_softmax": false},
+        {"layer_type": "residual", "hidden_dim": 128, "kernel_size": 8, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": false, "use_dropout": false, "dropout_prob": 0.0, "use_gap": false, "use_softmax": false},
+        {"layer_type": "residual", "hidden_dim": 128, "kernel_size": 8, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": false, "use_dropout": false, "dropout_prob": 0.0, "use_gap": false, "use_softmax": false},
+        {"layer_type": "residual", "hidden_dim": 128, "kernel_size": 8, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": false, "use_dropout": false, "dropout_prob": 0.0, "use_gap": false, "use_softmax": false},
+        {"layer_type": "residual", "hidden_dim": 256, "kernel_size": 8, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": false, "use_dropout": false, "dropout_prob": 0.0, "use_gap": false, "use_softmax": false},
+        {"layer_type": "residual", "hidden_dim": 256, "kernel_size": 8, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": false, "use_dropout": false, "dropout_prob": 0.0, "use_gap": false, "use_softmax": false},
+        {"layer_type": "residual", "hidden_dim": 256, "kernel_size": 8, "dilation": 1, "use_batchnorm": true, "use_relu": true, "use_maxpool": false, "use_dropout": false, "dropout_prob": 0.0, "use_gap": true, "use_softmax": true}
+    ]
+}
+

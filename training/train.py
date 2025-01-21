@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report, ConfusionMatrixDisplay
 from torch.utils.data import DataLoader, random_split
 from models.tcn import TCN, CausalConv1d
+from models.resTCN import ResidualTCN
 from utils.TimeSeriesDataset import TimeSeriesDataset
 from utils.Trainer import Trainer
 
@@ -34,12 +35,12 @@ class Exporter:
     @staticmethod
     def quantize_data(data, dtype, scale):
         """
-        Applica la quantizzazione a un array.
+        Applies quantization to an array.
 
-        :param data: Array numpy da quantizzare
-        :param dtype: Tipo di dato target (es. np.int8, np.float32)
-        :param scale: Fattore di scalatura
-        :return: Array quantizzato
+        :param data: Numpy array to quantize
+        :param dtype: Target data type (e.g., np.int8, np.float32)
+        :param scale: Scaling factor
+        :return: Quantized array
         """
         scaled_data = data * scale
         return scaled_data.astype(dtype)
@@ -56,7 +57,13 @@ class Exporter:
 
     @staticmethod
     def fuse_conv_batchnorm(conv_layer, batchnorm):
-        """Fonde i parametri di convoluzione e batchnorm."""
+        """
+        Fuses the parameters of convolution and batchnorm layers.
+
+        :param conv_layer: Convolution layer
+        :param batchnorm: Batch normalization layer
+        :return: Fused weights and biases
+        """
         conv = conv_layer.conv 
         if batchnorm is None:
             return conv.weight.data, conv.bias.data
@@ -70,13 +77,13 @@ class Exporter:
 
         # Fonde i pesi
         scale = gamma / torch.sqrt(var + eps)
-        fused_weight = conv.weight.data * scale[:, None, None]
+        conv.weight.data.mul_(scale[:, None, None])
         if conv.bias is not None:
-            fused_bias = (conv.bias.data - mean) * scale + beta
+            conv.bias.data.sub_(mean).mul_(scale).add_(beta)
         else:
-            fused_bias = (-mean) * scale + beta
+            conv.bias = torch.nn.Parameter((-mean) * scale + beta)
 
-        return fused_weight, fused_bias
+        return conv.weight.data, conv.bias.data
 
     @staticmethod
     def export_weights_and_biases(model, header_dir, data_dir, scales):
@@ -139,12 +146,21 @@ class Exporter:
                     'int8': 'int8_t'
                 }[dtype_name]
 
-                f.write(f"static const {c_type} WEIGHTS_BIAS[] = {{\n")
-                for i, value in enumerate(concatenated_array):
+                f.write(f"static const {c_type} WEIGHTS[] = {{\n")
+                for i, value in enumerate(concatenated_weights):
                     if i % 8 == 0 and i > 0:
                         f.write("\n    ")
                     f.write(f"{value}")
-                    if i < len(concatenated_array) - 1:
+                    if i < len(concatenated_weights) - 1:
+                        f.write(", ")
+                f.write("\n};\n\n")
+                
+                f.write(f"static const {c_type} BIASES[] = {{\n")
+                for i, value in enumerate(concatenated_biases):
+                    if i % 8 == 0 and i > 0:
+                        f.write("\n    ")
+                    f.write(f"{value}")
+                    if i < len(concatenated_biases) - 1:
                         f.write(", ")
                 f.write("\n};\n\n")
 
@@ -241,13 +257,11 @@ class Exporter:
             # Genera vettori per operazioni aggiuntive
             relu_flags = [1 if 'relu' in layer._modules else 0 for layer in model.layers]
             maxpool_flags = [1 if 'maxpool' in layer._modules else 0 for layer in model.layers]
-            dropout_flags = [1 if 'dropout' in layer._modules else 0 for layer in model.layers]
             gap_flags = [1 if 'gap' in layer._modules else 0 for layer in model.layers]
             softmax_flags = [1 if 'softmax' in layer._modules else 0 for layer in model.layers]
 
             f.write(f"static const int32_t RELU_FLAGS[] = {{ {', '.join(map(str, relu_flags))} }};\n")
             f.write(f"static const int32_t MAXPOOL_FLAGS[] = {{ {', '.join(map(str, maxpool_flags))} }};\n")
-            f.write(f"static const int32_t DROPOUT_FLAGS[] = {{ {', '.join(map(str, dropout_flags))} }};\n")
             f.write(f"static const int32_t GAP_FLAGS[] = {{ {', '.join(map(str, gap_flags))} }};\n")
             f.write(f"static const int32_t SOFTMAX_FLAGS[] = {{ {', '.join(map(str, softmax_flags))} }};\n")
 
@@ -269,7 +283,7 @@ with open(config_path, 'r') as f:
 sequence_length = config['sequence_length']
 
 # Dataset e DataLoader
-num_classes = 4  # Può essere modificato dinamicamente
+num_classes = 6
 dataset = TimeSeriesDataset(data, input_cols, output_col, sequence_length=sequence_length, num_classes=num_classes)
 train_size, val_size = int(0.7 * len(dataset)), int(0.15 * len(dataset))
 test_size = len(dataset) - train_size - val_size
@@ -282,6 +296,7 @@ test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 # Modello
 input_dim = len(input_cols)
 tcn_model = TCN(input_dim=input_dim, config_path=config_path).to(device)
+#tcn_model = ResidualTCN(input_dim=input_dim, config_path=config_path).to(device)
 
 # Mostra la struttura del modello
 print(tcn_model.describe())
@@ -289,8 +304,8 @@ print(tcn_model.describe())
 # Check per modello pre-addestrato
 model_path = f'checkpoints/best_{type(tcn_model).__name__}.pth'
 
-epochs = 1000
-patience = 50
+epochs = 10000
+patience = 1000
 
 force_training = True
 resume_training = False

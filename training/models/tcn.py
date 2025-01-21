@@ -32,6 +32,7 @@ class TCN(nn.Module):
         prev_channels = input_dim
 
         for layer_config in config['layers']:
+            layer_type = layer_config['layer_type']
             hidden_dim = layer_config['hidden_dim']
             kernel_size = layer_config['kernel_size']
             dilation = layer_config['dilation']

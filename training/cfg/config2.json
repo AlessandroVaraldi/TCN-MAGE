@@ -1,7 +1,8 @@
 {
-    "sequence_length": 300,
+    "sequence_length": 128,
     "layers": [
         {
+            "layer_type": "standard",
             "hidden_dim": 32,
             "kernel_size": 3,
             "dilation": 2,
@@ -14,6 +15,7 @@
             "use_softmax": false
         },
         {
+            "layer_type": "standard",
             "hidden_dim": 64,
             "kernel_size": 3,
             "dilation": 4,
@@ -26,6 +28,7 @@
             "use_softmax": false
         },
         {
+            "layer_type": "standard",
             "hidden_dim": 128,
             "kernel_size": 3,
             "dilation": 8,
@@ -38,7 +41,8 @@
             "use_softmax": false
         },
         {
-            "hidden_dim": 256,
+            "layer_type": "standard",
+            "hidden_dim": 64,
             "kernel_size": 1,
             "dilation": 1,
             "use_batchnorm": false,
@@ -50,7 +54,8 @@
             "use_softmax": false
         },
         {
-            "hidden_dim": 4,
+            "layer_type": "standard",
+            "hidden_dim": 6,
             "kernel_size": 1,
             "dilation": 1,
             "use_batchnorm": false,
