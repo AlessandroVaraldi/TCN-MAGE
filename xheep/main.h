@@ -1,10 +1,14 @@
-// Copyright 2024 EPFL
-// Solderpad Hardware License, Version 2.1, see LICENSE.md for details.
-// SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
-//
-// File: sw/applications/example_data_processing_from_flash/main.h
-// Author:  Francesco Poluzzi
-// Date: 29/07/2024
+/**
+ * @file main.h
+ * @brief Header file for example data processing from flash application.
+ * 
+ * This file contains the necessary includes, definitions, and function 
+ * declarations for the example data processing from flash application.
+ * 
+ * @author Alessandro Varaldi
+ * @date 21/01/2025
+ * 
+ */
 
 #ifndef MAIN_H_
 #define MAIN_H_
@@ -68,8 +72,8 @@ int inference(dtype (*input)[INPUT_DIM][TIME_LENGTH], dtype (*output)[NUM_CLASSE
 int compare_output(const dtype (*output)[NUM_CLASSES]);
 int initialize_input(dtype (*input)[INPUT_DIM][TIME_LENGTH]);
 
-static void printFloat(float number, int decimalPlaces);
-static void printIntegerPart(float x);
+void printFloat(float number, int decimalPlaces);
+void printIntegerPart(float x);
 
 w25q_error_codes_t fill_buffer(float *source, float *buffer, int len);
 uint32_t heep_get_flash_address_offset(uint32_t* data_address_lma);
@@ -124,14 +128,14 @@ int inference(dtype (*input)[INPUT_DIM][TIME_LENGTH], dtype (*output)[NUM_CLASSE
                                 input_value = (layer == 0)
                                               ? input[b][i][index]
                                               : current_buffer[b][i][index];
-                                result += ( buffer_weights[out * input_dim * kernel_size 
-                                                            + i * kernel_size + k] 
-                                            * input_value ) / SCALE;
+                                result += buffer_weights[out * input_dim * kernel_size 
+                                                         + i * kernel_size + k] 
+                                          * input_value;
                             }
                         }
                         ++i;
                     }
-                    result += buffer_bias[out];
+                    result = result / SCALE + buffer_bias[out];
                     next_buffer[b][out][t] = result;
                 }
             }
@@ -174,7 +178,7 @@ int inference(dtype (*input)[INPUT_DIM][TIME_LENGTH], dtype (*output)[NUM_CLASSE
         if (GAP_FLAGS[layer]) {
             for (b = 0; b < BATCH_SIZE; ++b) {
                 for (out = 0; out < output_dim; ++out) {
-                    dtype sum = 0;
+                    sum = 0;
                     for (t = 0; t < time_length; ++t) {
                         sum += next_buffer[b][out][t];
                     }
@@ -213,7 +217,7 @@ int inference(dtype (*input)[INPUT_DIM][TIME_LENGTH], dtype (*output)[NUM_CLASSE
             output[b][out] = next_buffer[b][out][0];
         }
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 int load_weights_from_flash(uint32_t offset, dtype* buffer, uint32_t size) {
@@ -221,7 +225,7 @@ int load_weights_from_flash(uint32_t offset, dtype* buffer, uint32_t size) {
     if (w25q128jw_read_standard(address_offset, (uint8_t*)buffer, size * sizeof(dtype)) != 0) {
         return EXIT_FAILURE;
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 int initialize_input(dtype (*input)[INPUT_DIM][TIME_LENGTH]) {
@@ -235,51 +239,35 @@ int initialize_input(dtype (*input)[INPUT_DIM][TIME_LENGTH]) {
     return 0;
 }
 
-static void printIntegerPart(float x) {
-    // Caso base: se x < 10 vuol dire che è una singola cifra
+void printIntegerPart(float x) {
     if (x < 10.0f) {
-        // Aggiungiamo '0' alla cifra "float" e la passiamo a putchar.
-        // Attenzione: '0' è un int, digit è float, quindi c'è comunque
-        // un'operazione int+float -> float e poi passaggio implicito a int.
         putchar('0' + x);
         return;
     }
-    // Altrimenti scorporiamo l'ultima cifra
     float leading = floorf(x / 10.0f);
     float digit   = fmodf(x, 10.0f);
 
-    // Stampa prima la parte "leading" (tutte le cifre meno l'ultima)
     printIntegerPart(leading);
-
-    // Stampa l'ultima cifra
     putchar('0' + digit);
 }
 
-// Stampa un float con un certo numero di cifre decimali, senza usare cast espliciti
-static void printFloat(float number, int decimalPlaces) {
-    // Gestione del segno
-
+void printFloat(float number, int decimalPlaces) {
     if (number < 0.0f) {
         putchar('-');
         number = -number;
     }
 
-    // Spezziamo il numero in parte intera e parte frazionaria
     float intPart;
     float fracPart = modff(number, &intPart);
 
-    // Stampa la parte intera
     if (intPart == 0.0f) {
-        // Se la parte intera è 0, stampiamo direttamente '0'
         putchar('0');
     } else {
         printIntegerPart(intPart);
     }
 
-    // Stampa il punto decimale
     putchar('.');
 
-    // Stampa la parte decimale
     for (int i = 0; i < decimalPlaces; i++) {
         fracPart = fracPart * 10.0f;
         float digit = floorf(fracPart);
