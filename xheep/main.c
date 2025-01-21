@@ -16,12 +16,11 @@
 #include <math.h>
 #include <string.h>
 
-#include "main.h"
-
 #include "x-heep.h"
 #include "w25q128jw.h"
-#include "main.h"
 #include "dma_sdk.h"
+
+#include "main.h"
 
 #define FS_INITIAL 0x01
 
