@@ -43,6 +43,7 @@ class Exporter:
         :return: Quantized array
         """
         scaled_data = data * scale
+        scaled_data = np.round(scaled_data) if dtype != np.float32 else scaled_data
         return scaled_data.astype(dtype)
     
     @staticmethod
@@ -54,6 +55,45 @@ class Exporter:
             np.save(os.path.join(dtype_folder, "data.npy"), quantized_data)
             with open(os.path.join(dtype_folder, "data.bin"), "wb") as f:
                 f.write(quantized_data.tobytes())
+                
+    @staticmethod          
+    def fuse_batchnorm_network(model):
+        """
+        Fonde la batch normalization in tutta la rete, modificando il modello in-place.
+
+        :param model: Modello TCN PyTorch con potenziali layer CausalConv1d + BatchNorm1d.
+        :return: Modello con BatchNorm fuso nei layer convolutivi.
+        """
+        for layer_idx, layer in enumerate(model.layers):
+            # Accede al primo modulo nel layer (dovrebbe essere CausalConv1d)
+            causal_conv = layer[0]  # In nn.Sequential, il primo modulo è la convoluzione
+            if isinstance(causal_conv, CausalConv1d) and causal_conv.batchnorm is not None:
+                print(f"Fusione della BatchNorm per il layer {layer_idx}...")
+
+                conv = causal_conv.conv
+                batchnorm = causal_conv.batchnorm
+
+                # Ottieni i parametri di BatchNorm
+                gamma = batchnorm.weight.data
+                beta = batchnorm.bias.data
+                mean = batchnorm.running_mean
+                var = batchnorm.running_var
+                eps = batchnorm.eps
+
+                # Calcola il fattore di scala e adatta i pesi e i bias
+                scale = gamma / torch.sqrt(var + eps)
+                conv.weight.data.mul_(scale[:, None, None])  # Modifica in-place i pesi
+
+                if conv.bias is not None:
+                    conv.bias.data.sub_(mean).mul_(scale).add_(beta)
+                else:
+                    conv.bias = torch.nn.Parameter((-mean) * scale + beta)
+
+                # Rimuove il layer di BatchNorm dopo la fusione
+                causal_conv.batchnorm = None
+
+        print("Fusione BatchNorm completata su tutta la rete.")
+        return model
 
     @staticmethod
     def fuse_conv_batchnorm(conv_layer, batchnorm):
@@ -95,6 +135,9 @@ class Exporter:
         :param data_dir: Directory per i file binari/numpy
         :param scales: Lista di fattori di scalatura
         """
+        # Fondere BatchNorm prima dell'esportazione
+        model = Exporter.fuse_batchnorm_network(model)
+
         dtypes = [(np.float32, 'float32'), (np.int32, 'int32'), (np.int16, 'int16'), (np.int8, 'int8')]
 
         for dtype, dtype_name in dtypes:
@@ -107,23 +150,24 @@ class Exporter:
 
             for layer_idx, layer in enumerate(model.layers):
                 causal_conv = layer[0]  # Accede al primo modulo (CausalConv1d) in nn.Sequential
-                if isinstance(causal_conv, CausalConv1d):
-                    fused_weight, fused_bias = Exporter.fuse_conv_batchnorm(causal_conv, causal_conv.batchnorm)
-                    quantized_weights = Exporter.quantize_data(fused_weight.cpu().numpy(), dtype, scale)
-                    quantized_biases = Exporter.quantize_data(fused_bias.cpu().numpy(), dtype, scale)
+                fused_weight = causal_conv.conv.weight.data.cpu().numpy()
+                fused_bias = causal_conv.conv.bias.data.cpu().numpy()
 
-                    # Salva i pesi e bias separati per ogni layer
-                    np.save(os.path.join(dtype_folder, f"layer_{layer_idx}_weights.npy"), quantized_weights)
-                    np.save(os.path.join(dtype_folder, f"layer_{layer_idx}_biases.npy"), quantized_biases)
+                quantized_weights = Exporter.quantize_data(fused_weight, dtype, scale)
+                quantized_biases = Exporter.quantize_data(fused_bias, dtype, scale)
 
-                    with open(os.path.join(dtype_folder, f"layer_{layer_idx}_weights.bin"), "wb") as f:
-                        f.write(quantized_weights.tobytes())
-                    with open(os.path.join(dtype_folder, f"layer_{layer_idx}_biases.bin"), "wb") as f:
-                        f.write(quantized_biases.tobytes())
+                # Salva i pesi e bias separati per ogni layer
+                np.save(os.path.join(dtype_folder, f"layer_{layer_idx}_weights.npy"), quantized_weights)
+                np.save(os.path.join(dtype_folder, f"layer_{layer_idx}_biases.npy"), quantized_biases)
 
-                    # Accumula per concatenare
-                    all_weights.append(quantized_weights.flatten())
-                    all_biases.append(quantized_biases.flatten())
+                with open(os.path.join(dtype_folder, f"layer_{layer_idx}_weights.bin"), "wb") as f:
+                    f.write(quantized_weights.tobytes())
+                with open(os.path.join(dtype_folder, f"layer_{layer_idx}_biases.bin"), "wb") as f:
+                    f.write(quantized_biases.tobytes())
+
+                # Accumula per concatenare
+                all_weights.append(quantized_weights.flatten())
+                all_biases.append(quantized_biases.flatten())
 
             # Concatenazione di tutti i pesi e bias per header
             concatenated_weights = np.concatenate(all_weights)
@@ -154,7 +198,7 @@ class Exporter:
                     if i < len(concatenated_weights) - 1:
                         f.write(", ")
                 f.write("\n};\n\n")
-                
+
                 f.write(f"static const {c_type} BIASES[] = {{\n")
                 for i, value in enumerate(concatenated_biases):
                     if i % 8 == 0 and i > 0:
@@ -277,13 +321,13 @@ data = pd.read_csv(file_path)
 data = DataUtils.check_and_clean_data(data, input_cols, output_col)
 
 # === Sequence Length ===
-config_path = "cfg/config2.json"
+config_path = "cfg/test.json"
 with open(config_path, 'r') as f:
     config = json.load(f)
 sequence_length = config['sequence_length']
 
 # Dataset e DataLoader
-num_classes = 6
+num_classes = 4
 dataset = TimeSeriesDataset(data, input_cols, output_col, sequence_length=sequence_length, num_classes=num_classes)
 train_size, val_size = int(0.7 * len(dataset)), int(0.15 * len(dataset))
 test_size = len(dataset) - train_size - val_size

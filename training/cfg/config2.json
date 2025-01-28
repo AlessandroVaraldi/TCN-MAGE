@@ -1,5 +1,5 @@
 {
-    "sequence_length": 128,
+    "sequence_length": 32,
     "layers": [
         {
             "layer_type": "standard",
