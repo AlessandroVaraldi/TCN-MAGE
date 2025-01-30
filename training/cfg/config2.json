@@ -1,6 +1,19 @@
 {
-    "sequence_length": 32,
+    "sequence_length": 128,
     "layers": [
+        {
+            "layer_type": "standard",
+            "hidden_dim": 16,
+            "kernel_size": 3,
+            "dilation": 1,
+            "use_batchnorm": true,
+            "use_relu": true,
+            "use_maxpool": true,
+            "use_dropout": false,
+            "dropout_prob": 0.0,
+            "use_gap": false,
+            "use_softmax": false
+        },
         {
             "layer_type": "standard",
             "hidden_dim": 32,

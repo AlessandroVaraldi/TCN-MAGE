@@ -10,13 +10,27 @@ class Trainer:
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(model.parameters(), lr=learning_rate)
         self.device = device
+        self.max_conv_values = {}  # Dizionario per registrare i massimi valori delle convoluzioni
+
+    def _hook_conv_output(self, module, input, output, layer_name):
+        max_value = output.abs().max().item()
+        if layer_name not in self.max_conv_values:
+            self.max_conv_values[layer_name] = max_value
+        else:
+            self.max_conv_values[layer_name] = max(self.max_conv_values[layer_name], max_value)
+
+    def _register_hooks(self):
+        for name, layer in self.model.named_modules():
+            if isinstance(layer, nn.Conv1d):
+                layer.register_forward_hook(lambda module, input, output, name=name: self._hook_conv_output(module, input, output, name))
 
     def train(self, train_loader, val_loader, epochs=1000, patience=50, threshold=1e-4):
+        self._register_hooks()  # Registra gli hook per tracciare le convoluzioni
+        
         train_losses, val_losses = [], []
         best_val_loss = float('inf')
         epochs_without_improvement = 0
-        best_model_path = f'best_{type(self.model).__name__}.pth'
-        best_model_path = os.path.join('checkpoints/', best_model_path)
+        best_model_path = os.path.join('checkpoints/', f'best_{type(self.model).__name__}.pth')
 
         plt.ion()
         fig, ax = plt.subplots()
@@ -28,7 +42,7 @@ class Trainer:
 
                 train_losses.append(train_loss)
                 val_losses.append(val_loss)
-
+                
                 self._update_plot(ax, train_losses, val_losses, epoch)
 
                 if val_loss < best_val_loss - threshold:
@@ -44,9 +58,13 @@ class Trainer:
                     break
         except KeyboardInterrupt:
             print(f"\n> Training interrotto manualmente alla epoca {epoch}.\n")
+        
         plt.ioff()
         plt.show()
-        return self.model, train_losses, val_losses
+        
+        max_values = self._print_max_conv_values()
+        
+        return self.model, train_losses, val_losses, max_values
 
     def _train_one_epoch(self, train_loader):
         self.model.train()
@@ -81,3 +99,11 @@ class Trainer:
         ax.legend()
         plt.draw()
         plt.pause(0.01)
+
+    def _print_max_conv_values(self):
+        max_values = list(self.max_conv_values.values())
+        print("\n> Massimi valori delle convoluzioni per ogni layer:")
+        for layer_name, max_value in self.max_conv_values.items():
+            print(f"  {layer_name}: {max_value:.6f}")
+        return max_values
+            

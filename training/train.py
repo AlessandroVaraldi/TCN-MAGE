@@ -1,6 +1,7 @@
 import os
 import json
 import torch
+import math
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -171,6 +172,7 @@ class Exporter:
 
             # Concatenazione di tutti i pesi e bias per header
             concatenated_weights = np.concatenate(all_weights)
+            print(concatenated_weights.shape)
             concatenated_biases = np.concatenate(all_biases)
             concatenated_array = np.concatenate([concatenated_weights, concatenated_biases])
 
@@ -189,15 +191,18 @@ class Exporter:
                     'int16': 'int16_t',
                     'int8': 'int8_t'
                 }[dtype_name]
-
+                k = 0
                 f.write(f"static const {c_type} WEIGHTS[] = {{\n")
+                ("\n    ")
                 for i, value in enumerate(concatenated_weights):
+                    k = k + 1
                     if i % 8 == 0 and i > 0:
                         f.write("\n    ")
                     f.write(f"{value}")
                     if i < len(concatenated_weights) - 1:
                         f.write(", ")
                 f.write("\n};\n\n")
+                print(k)
 
                 f.write(f"static const {c_type} BIASES[] = {{\n")
                 for i, value in enumerate(concatenated_biases):
@@ -211,7 +216,7 @@ class Exporter:
                 f.write(f"#endif // WEIGHTS_BIAS_{dtype_name.upper()}_H\n")
                 
     @staticmethod
-    def export_inputs_outputs(input_data, output_data, header_dir, data_dir, scales):
+    def export_inputs_outputs(input_data, output_data, header_dir, data_dir, scales, batch=1):
         """
         Esporta input e output in formato .h, .npy e .bin per tutte le scale.
 
@@ -231,20 +236,20 @@ class Exporter:
             quantized_input = Exporter.quantize_data(input_data, dtype, scale)
             quantized_output = Exporter.quantize_data(output_data, dtype, scale)
 
-            # Salvataggio in formato .npy
-            np.save(os.path.join(dtype_folder, "input.npy"), quantized_input)
-            np.save(os.path.join(dtype_folder, "output.npy"), quantized_output)
+            # Salvataggio in formato .npy per batch
+            np.save(os.path.join(dtype_folder, f"input_{batch}.npy"), quantized_input)
+            np.save(os.path.join(dtype_folder, f"output_{batch}.npy"), quantized_output)
 
             # Salvataggio in formato .bin
-            with open(os.path.join(dtype_folder, "input.bin"), "wb") as f:
+            with open(os.path.join(dtype_folder, f"input_{batch}.bin"), "wb") as f:
                 f.write(quantized_input.tobytes())
-            with open(os.path.join(dtype_folder, "output.bin"), "wb") as f:
+            with open(os.path.join(dtype_folder, f"output_{batch}.bin"), "wb") as f:
                 f.write(quantized_output.tobytes())
 
             # Salvataggio in formato header
             header_path = os.path.join(header_dir, dtype_name)
             os.makedirs(header_path, exist_ok=True)
-            header_path = os.path.join(header_path, f"input_output_{dtype_name}.h")
+            header_path = os.path.join(header_path, f"input_output_{dtype_name}_{batch}.h")
             with open(header_path, "w") as f:
                 f.write(f"#ifndef INPUT_OUTPUT_{dtype_name.upper()}_H\n")
                 f.write(f"#define INPUT_OUTPUT_{dtype_name.upper()}_H\n\n")
@@ -321,7 +326,7 @@ data = pd.read_csv(file_path)
 data = DataUtils.check_and_clean_data(data, input_cols, output_col)
 
 # === Sequence Length ===
-config_path = "cfg/test.json"
+config_path = "cfg/config2.json"
 with open(config_path, 'r') as f:
     config = json.load(f)
 sequence_length = config['sequence_length']
@@ -332,7 +337,11 @@ dataset = TimeSeriesDataset(data, input_cols, output_col, sequence_length=sequen
 train_size, val_size = int(0.7 * len(dataset)), int(0.15 * len(dataset))
 test_size = len(dataset) - train_size - val_size
 
-train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size])
+
+train_dataset = torch.utils.data.Subset(dataset, range(0, train_size))
+val_dataset = torch.utils.data.Subset(dataset, range(train_size, train_size + val_size))
+test_dataset = torch.utils.data.Subset(dataset, range(train_size + val_size, len(dataset)))
+
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
@@ -357,22 +366,23 @@ resume_training = False
 def train_and_save_model():
     tcn_model.train()
     trainer = Trainer(tcn_model, device, learning_rate=1e-3)
-    trained_model, _, _ = trainer.train(train_loader, val_loader, epochs=epochs, patience=patience)
+    trained_model, _, _, max_values = trainer.train(train_loader, val_loader, epochs=epochs, patience=patience)
     torch.save(trained_model.state_dict(), model_path)
+    return max_values
 
 if resume_training:
     if os.path.exists(model_path):
         tcn_model.load_state_dict(torch.load(model_path, map_location=device))
-    train_and_save_model()
+    max_values = train_and_save_model()
 elif force_training:
     if os.path.exists(model_path):
         os.remove(model_path)
-    train_and_save_model()
+    max_values = train_and_save_model()
 else:
     if os.path.exists(model_path):
         tcn_model.load_state_dict(torch.load(model_path, map_location=device))
     else:
-        train_and_save_model()
+        max_values = train_and_save_model()
     
 # Testing
 tcn_model.eval()
@@ -413,6 +423,11 @@ with torch.no_grad():
 fixed_point = 12
 scales = [1.0, 2**fixed_point, 2**(fixed_point//2), 2**(fixed_point//4)]
 
+bit_lengths = []
+for value in max_values:
+    bit_lengths.append(2*(math.ceil(math.log2(value)) + 1))
+print(f"Bit lengths: {bit_lengths}")
+
 header_dir = "../static_ie"
 data_dir = "data"
 # Remove existing files
@@ -420,7 +435,8 @@ if os.path.exists(data_dir):
     os.system(f"rm -r {data_dir}")
 os.makedirs(data_dir, exist_ok=True)
 Exporter.export_weights_and_biases(best_tcn, header_dir, data_dir, scales)
-Exporter.export_inputs_outputs(torch_input.cpu().numpy(), py_output, header_dir, data_dir, scales)
+for i in range(10):
+    Exporter.export_inputs_outputs(torch_input.cpu().numpy(), py_output, header_dir, data_dir, scales, i)
 Exporter.export_network_parameters(
     header_path=os.path.join(header_dir, "tcn_network_params.h"),
     model=best_tcn,

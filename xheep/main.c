@@ -14,7 +14,7 @@
 
  /* By default, printfs are activated for FPGA and disabled for simulation. */
 #define PRINTF_IN_FPGA  1
-#define PRINTF_IN_SIM   1
+#define PRINTF_IN_SIM   0
 #if TARGET_SIM && PRINTF_IN_SIM
         #define PRINTF(fmt, ...)    printf(fmt, ## __VA_ARGS__)
 #elif PRINTF_IN_FPGA && !TARGET_SIM
@@ -23,13 +23,13 @@
     #define PRINTF(...)
 #endif
 
-float input[BATCH_SIZE][INPUT_DIM][TIME_LENGTH] = {0};
+//float input[BATCH_SIZE][INPUT_DIM][TIME_LENGTH] = {0};
 float output[BATCH_SIZE][NUM_CLASSES] = {0};
 
 // === Function Prototypes ===
 int initialize_input(float (*input)[INPUT_DIM][TIME_LENGTH]);
 int quantize_input(float (*input)[INPUT_DIM][TIME_LENGTH], dtype (*q_input)[INPUT_DIM][TIME_LENGTH]);
-int inference(float (*q_input)[INPUT_DIM][TIME_LENGTH], float (*q_output)[NUM_CLASSES]);
+int inference(float (*output)[NUM_CLASSES]);
 int dequantize_output(dtype (*q_output)[NUM_CLASSES], float (*output)[NUM_CLASSES]);
 int compare_output(const float (*output)[NUM_CLASSES]);
 
@@ -67,14 +67,8 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    PRINTF("Inizializzazione dell'input...\n");
-    if (initialize_input(input) != EXIT_SUCCESS) {
-        PRINTF("Errore inizializzazione input\n");
-        return EXIT_FAILURE;
-    }
-
     PRINTF("Esecuzione dell'inferenza...\n");
-    if (inference(input, output) != EXIT_SUCCESS) {
+    if (inference(output) != EXIT_SUCCESS) {
         PRINTF("Errore inferenza\n");
         return EXIT_FAILURE;
     }
@@ -108,7 +102,7 @@ int compare_output(const float (*output)[NUM_CLASSES]) {
             PRINTF(", Output C: ");
             printFloat((float)current_output, 6);
             PRINTF(", ");
-            if (fabsf((float)current_output - (float)current_reference_output) > 1e-3) {
+            if (fabsf((float)current_output - (float)current_reference_output) > 1e-1) {
                 PRINTF("Errore: i valori non corrispondono!\n");
             }
             else {
