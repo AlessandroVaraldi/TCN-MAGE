@@ -7,9 +7,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from sklearn.metrics import confusion_matrix, classification_report, ConfusionMatrixDisplay
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from models.tcn import TCN, CausalConv1d
-from models.resTCN import ResidualTCN
 from utils.TimeSeriesDataset import TimeSeriesDataset
 from utils.Trainer import Trainer
 
@@ -172,9 +171,7 @@ class Exporter:
 
             # Concatenazione di tutti i pesi e bias per header
             concatenated_weights = np.concatenate(all_weights)
-            print(concatenated_weights.shape)
             concatenated_biases = np.concatenate(all_biases)
-            concatenated_array = np.concatenate([concatenated_weights, concatenated_biases])
 
             # Salvataggio in formato header
             header_path = os.path.join(header_dir, dtype_name)
@@ -337,10 +334,7 @@ dataset = TimeSeriesDataset(data, input_cols, output_col, sequence_length=sequen
 train_size, val_size = int(0.7 * len(dataset)), int(0.15 * len(dataset))
 test_size = len(dataset) - train_size - val_size
 
-
-train_dataset = torch.utils.data.Subset(dataset, range(0, train_size))
-val_dataset = torch.utils.data.Subset(dataset, range(train_size, train_size + val_size))
-test_dataset = torch.utils.data.Subset(dataset, range(train_size + val_size, len(dataset)))
+train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
 
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
@@ -436,6 +430,7 @@ if os.path.exists(data_dir):
 os.makedirs(data_dir, exist_ok=True)
 Exporter.export_weights_and_biases(best_tcn, header_dir, data_dir, scales)
 for i in range(10):
+    torch_input = torch.randn(batch, input_dim, sequence_length, dtype=torch.float32)
     Exporter.export_inputs_outputs(torch_input.cpu().numpy(), py_output, header_dir, data_dir, scales, i)
 Exporter.export_network_parameters(
     header_path=os.path.join(header_dir, "tcn_network_params.h"),
