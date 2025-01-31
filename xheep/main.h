@@ -19,7 +19,7 @@
 #include "core_v_mini_mcu.h"
 
 // === Network Parameters ===
-#include "float32/input_output_float32_0.h"
+#include "float32/input_output_float32_2.h"
 #include "tcn_network_params.h"
 
 // Per semplicità, rimane BATCH_SIZE=1
@@ -31,7 +31,7 @@
 #define PRECISION_INT16   3
 #define PRECISION_INT32   4
 
-#define PRECISION PRECISION_INT8
+#define PRECISION PRECISION_FLOAT32
 
 // === Macros ===
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -56,37 +56,21 @@
     #error "Tipo di precisione non supportato!"
 #endif
 
-// ========================================================================
-// IN ORIGINE:
-//   static dtype buffer_weights[MAX_HIDDEN_DIM * 3];
-//   static dtype buffer_bias[1];
-//   static dtype intermediate_a[BATCH_SIZE][MAX_HIDDEN_DIM][TIME_LENGTH];
-//   static dtype intermediate_b[BATCH_SIZE][MAX_HIDDEN_DIM][TIME_LENGTH];
-//
-// Ora li unifichiamo in un unico array "global_buffer" con offset diversi.
-// ========================================================================
-
-// Calcoliamo la dimensione necessaria per ciascun buffer:
 #define SIZE_WEIGHTS      (MAX_HIDDEN_DIM * 3)
 #define SIZE_BIAS         (1)
 #define SIZE_INTERMEDIATE (BATCH_SIZE * MAX_HIDDEN_DIM * TIME_LENGTH)
 
-// Dimensione complessiva dell'unico array
 #define GLOBAL_BUFFER_SIZE ( SIZE_WEIGHTS + SIZE_BIAS + 2 * SIZE_INTERMEDIATE )
 
-// Unico array globale
 static dtype global_buffer[GLOBAL_BUFFER_SIZE] = {0};
 
-// Buffer in float per elaborazioni (ReLU, pool, etc.)
 float dq_buffer[BATCH_SIZE][MAX_HIDDEN_DIM][TIME_LENGTH];
 
-// Offset dove inizia ciascuna "sezione"
 #define OFFSET_WEIGHTS        0
 #define OFFSET_BIAS           (OFFSET_WEIGHTS + SIZE_WEIGHTS)
 #define OFFSET_INTERMEDIATE_A (OFFSET_BIAS + SIZE_BIAS)
 #define OFFSET_INTERMEDIATE_B (OFFSET_INTERMEDIATE_A + SIZE_INTERMEDIATE)
 
-// Mappiamo i vecchi nomi sui relativi puntatori/array
 static dtype *buffer_weights = &global_buffer[OFFSET_WEIGHTS];
 static dtype *buffer_bias    = &global_buffer[OFFSET_BIAS];
 
@@ -102,26 +86,10 @@ static dtype (*intermediate_b)[MAX_HIDDEN_DIM][TIME_LENGTH] =
 // ========================================================================
 
 /**
- * @brief Initialize the input data array using a reference input.
- */
-int initialize_input(float (*input)[INPUT_DIM][TIME_LENGTH]);
-
-/**
- * @brief Quantizes the input data by scaling and casting to a specified data type.
- */
-int quantize_input(float (*input)[INPUT_DIM][TIME_LENGTH],
-                   dtype (*q_input)[INPUT_DIM][TIME_LENGTH]);
-
-/**
  * @brief Perform the entire inference process and store the output in float form.
  *        The final output dimension is [BATCH_SIZE][NUM_CLASSES].
  */
 int inference(float (*output)[NUM_CLASSES]);
-
-/**
- * @brief Dequantizes the final output values from dtype to float.
- */
-int dequantize_output(dtype (*q_output)[NUM_CLASSES], float (*output)[NUM_CLASSES]);
 
 /**
  * @brief Dequantize a 3D buffer from quant_buffer -> float_buffer
@@ -172,58 +140,6 @@ int check_overflow(int32_t a, int32_t b);
 // ========================================================================
 // Function Implementations
 // ========================================================================
-
-/**
- * @brief Check for multiplication overflow in int32_t
- */
-int check_overflow(int32_t a, int32_t b) {
-    int64_t result = (int64_t)a * (int64_t)b;
-    return (result < INT32_MIN || result > INT32_MAX);
-}
-
-/**
- * @brief Initialize the input data array using REF_INPUT from the header.
- */
-int initialize_input(float (*input)[INPUT_DIM][TIME_LENGTH]) {
-    for (int i = 0; i < BATCH_SIZE; ++i) {
-        for (int j = 0; j < INPUT_DIM; ++j) {
-            for (int k = 0; k < TIME_LENGTH; ++k) {
-                input[i][j][k] = REF_INPUT[i * INPUT_DIM * TIME_LENGTH
-                                          + j * TIME_LENGTH
-                                          + k];
-            }
-        }
-    }
-    return 0;
-}
-
-/**
- * @brief Quantizes the input data by scaling and casting to dtype.
- */
-int quantize_input(float (*input)[INPUT_DIM][TIME_LENGTH],
-                   dtype (*q_input)[INPUT_DIM][TIME_LENGTH])
-{
-    for (int i = 0; i < BATCH_SIZE; ++i) {
-        for (int j = 0; j < INPUT_DIM; ++j) {
-            for (int k = 0; k < TIME_LENGTH; ++k) {
-                q_input[i][j][k] = (dtype)(input[i][j][k] * SCALE);
-            }
-        }
-    }
-    return 0;
-}
-
-/**
- * @brief Dequantizes the final output values from dtype to float.
- */
-int dequantize_output(dtype (*q_output)[NUM_CLASSES], float (*output)[NUM_CLASSES]){
-    for (int i = 0; i < BATCH_SIZE; ++i) {
-        for (int j = 0; j < NUM_CLASSES; ++j) {
-            output[i][j] = (float)q_output[i][j] / SCALE;
-        }
-    }
-    return 0;
-}
 
 /**
  * @brief Dequantize a 3D buffer from quant_buffer -> float_buffer
@@ -379,24 +295,17 @@ int inference(float (*output)[NUM_CLASSES])
                     // cicli su input_dim e kernel_size
                     for (i = 0; i < input_dim; ++i) {
                         for (k = 0; k < kernel_size; ++k) {
-                            int index = t - (kernel_size -1 -k)*dilation;
+                            int index = t - (kernel_size - 1 - k) * dilation;
                             if (index >= 0 && index < time_length) {
                                 dtype input_value;
                                 if (layer == 0) {
                                     // se layer 0, prendi da REF_INPUT
-                                    input_value = (dtype)(REF_INPUT[b * INPUT_DIM * TIME_LENGTH
-                                                        + i * TIME_LENGTH
-                                                        + index] * SCALE);
+                                    input_value = (dtype)(REF_INPUT[b * INPUT_DIM * TIME_LENGTH + i * TIME_LENGTH + index] * SCALE);
                                 } else {
                                     input_value = current_buffer[b][i][index];
                                 }
                                 dtype weight = buffer_weights[i*kernel_size + k];
 
-                                if (check_overflow((int32_t)input_value,
-                                                   (int32_t)weight)) {
-                                    printf("Overflow detected\n");
-                                    return EXIT_FAILURE;
-                                }
                                 result += (input_value * weight) / SCALE;
                             }
                         }
