@@ -192,14 +192,12 @@ class Exporter:
                 f.write(f"static const {c_type} WEIGHTS[] = {{\n")
                 ("\n    ")
                 for i, value in enumerate(concatenated_weights):
-                    k = k + 1
                     if i % 8 == 0 and i > 0:
                         f.write("\n    ")
                     f.write(f"{value}")
                     if i < len(concatenated_weights) - 1:
                         f.write(", ")
                 f.write("\n};\n\n")
-                print(k)
 
                 f.write(f"static const {c_type} BIASES[] = {{\n")
                 for i, value in enumerate(concatenated_biases):
