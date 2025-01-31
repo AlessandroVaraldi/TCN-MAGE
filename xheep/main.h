@@ -31,7 +31,7 @@
 #define PRECISION_INT16   3
 #define PRECISION_INT32   4
 
-#define PRECISION PRECISION_FLOAT32
+#define PRECISION PRECISION_INT32
 
 // === Macros ===
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -44,14 +44,17 @@
     #include "int8/weights_bias_int8.h"
     #define SCALE (int)pow(2, FIXED_POINT >> 2)
     typedef int8_t dtype;
+    typedef int16_t dtype2;
 #elif PRECISION == PRECISION_INT16
     #include "int16/weights_bias_int16.h"
     #define SCALE (int)pow(2, FIXED_POINT >> 1)
     typedef int16_t dtype;
+    typedef int32_t dtype2;
 #elif PRECISION == PRECISION_INT32
     #include "int32/weights_bias_int32.h"
     #define SCALE (int)pow(2, FIXED_POINT)
     typedef int32_t dtype;
+    typedef int64_t dtype2;
 #else
     #error "Tipo di precisione non supportato!"
 #endif
@@ -229,9 +232,7 @@ static void printFloat(float number, int decimalPlaces) {
  * @brief Fill a buffer in SRAM by reading from SPI flash.
  */
 w25q_error_codes_t fill_buffer(dtype *source, dtype *buffer, int len){
-    // Calcola offset in flash
     uint32_t source_flash = heep_get_flash_address_offset((uint32_t*)source);
-    // Legge len * sizeof(dtype) byte
     w25q_error_codes_t status = w25q128jw_read_standard(
         source_flash,
         buffer,
@@ -247,19 +248,16 @@ w25q_error_codes_t fill_buffer(dtype *source, dtype *buffer, int len){
  */
 int inference(float (*output)[NUM_CLASSES])
 {
-    // Esempio: usiamo i due buffer intermedi come "ping-pong"
     dtype (*current_buffer)[MAX_HIDDEN_DIM][TIME_LENGTH] = intermediate_a;
     dtype (*next_buffer)  [MAX_HIDDEN_DIM][TIME_LENGTH] = intermediate_b;
 
-    // Alcune variabili...
     int time_length  = TIME_LENGTH;
     int layer, out, b, t, i, k;
     int input_dim, output_dim, kernel_size, dilation;
 
-    int weight_offset = 0;  // dove siamo arrivati in WEIGHTS[]
-    int bias_offset   = 0;  // dove siamo arrivati in BIASES[]
+    int weight_offset = 0;
+    int bias_offset   = 0;
 
-    // Ciclo sui layer (NUM_LAYERS è in tcn_network_params.h)
     for (layer = 0; layer < NUM_LAYERS; ++layer) {
         printf("Layer %d...\n", layer);
 
@@ -268,63 +266,52 @@ int inference(float (*output)[NUM_CLASSES])
         kernel_size = KERNEL_SIZES[layer];
         dilation    = DILATIONS[layer];
 
-        // Convoluzione per canale di uscita
         for (out = 0; out < output_dim; ++out) {
-            // Carichiamo i pesi corrispondenti da flash
-            if (fill_buffer(&WEIGHTS[weight_offset],
-                            buffer_weights,
-                            input_dim * kernel_size) != FLASH_OK)
+            if (fill_buffer(&WEIGHTS[weight_offset], buffer_weights, input_dim * kernel_size) != FLASH_OK)
             {
                 return EXIT_FAILURE;
             }
             weight_offset += input_dim * kernel_size;
 
-            // Carichiamo il bias
-            if (fill_buffer(&BIASES[bias_offset],
-                            buffer_bias,
-                            1) != FLASH_OK)
+            if (fill_buffer(&BIASES[bias_offset], buffer_bias, 1) != FLASH_OK)
             {
                 return EXIT_FAILURE;
             }
             bias_offset += 1;
 
-            // Esegui la convolution
             for (b = 0; b < BATCH_SIZE; ++b) {
                 for (t = 0; t < time_length; ++t) {
                     dtype result = 0;
-                    // cicli su input_dim e kernel_size
+                    dtype2 xresult = 0;
                     for (i = 0; i < input_dim; ++i) {
                         for (k = 0; k < kernel_size; ++k) {
                             int index = t - (kernel_size - 1 - k) * dilation;
                             if (index >= 0 && index < time_length) {
                                 dtype input_value;
                                 if (layer == 0) {
-                                    // se layer 0, prendi da REF_INPUT
                                     input_value = (dtype)(REF_INPUT[b * INPUT_DIM * TIME_LENGTH + i * TIME_LENGTH + index] * SCALE);
                                 } else {
                                     input_value = current_buffer[b][i][index];
                                 }
                                 dtype weight = buffer_weights[i*kernel_size + k];
 
-                                result += (input_value * weight) / SCALE;
+                                xresult = (dtype2)input_value * (dtype2)weight;
+
+                                result += (dtype)(xresult / SCALE);
                             }
                         }
                     }
-                    // Aggiungi bias
                     result += buffer_bias[0];
 
-                    // Salva in next_buffer
                     next_buffer[b][out][t] = result;
                 }
             }
         }
         printf("    Convolution done\n");
 
-        // Dequantizzi in float
         dequantize_intermediate_buffer(next_buffer, dq_buffer, output_dim, time_length);
         printf("    Dequantized\n");
 
-        // Se c'è la ReLU
         if (RELU_FLAGS[layer]) {
             for (b = 0; b < BATCH_SIZE; ++b) {
                 for (out = 0; out < output_dim; ++out) {
@@ -338,9 +325,8 @@ int inference(float (*output)[NUM_CLASSES])
             printf("    ReLU applied\n");
         }
 
-        // Se c'è il maxpool
         if (MAXPOOL_FLAGS[layer]) {
-            time_length = time_length / 2; // Dividi per 2
+            time_length = time_length / 2;
             for (b = 0; b < BATCH_SIZE; ++b) {
                 for (out = 0; out < output_dim; ++out) {
                     for (t = 0; t < time_length; ++t) {
@@ -353,7 +339,6 @@ int inference(float (*output)[NUM_CLASSES])
             printf("    MaxPool applied\n");
         }
 
-        // Se c'è Global Average Pooling
         if (GAP_FLAGS[layer]) {
             float sum;
             for (b = 0; b < BATCH_SIZE; ++b) {
@@ -369,7 +354,6 @@ int inference(float (*output)[NUM_CLASSES])
             printf("    GAP applied\n");
         }
 
-        // Se c'è Softmax
         if (SOFTMAX_FLAGS[layer]) {
             for (b = 0; b < BATCH_SIZE; ++b) {
                 for (t = 0; t < time_length; ++t) {
@@ -387,13 +371,10 @@ int inference(float (*output)[NUM_CLASSES])
             printf("    Softmax applied\n");
         }
 
-        // Ri-quantizzi dq_buffer -> current_buffer
         requantize_intermediate_buffer(dq_buffer, current_buffer, output_dim, time_length);
         printf("    Requantized\n");
     }
 
-    // L'uscita finale è in current_buffer
-    // Dequantizzi su output float [BATCH_SIZE][NUM_CLASSES]
     for (int b_ = 0; b_ < BATCH_SIZE; ++b_) {
         for (int out_ = 0; out_ < NUM_CLASSES; ++out_) {
             output[b_][out_] = (float)current_buffer[b_][out_][0] / SCALE;
