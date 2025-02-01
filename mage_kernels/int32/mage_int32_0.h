@@ -1,15 +1,32 @@
 #ifndef INT32_MAGE_LAYER_0_H
 #define INT32_MAGE_LAYER_0_H
 
+#include "w25q128jw.h"
 #include "mage_cgra.h"
+
+#include "tcn_network_params.h"
+#include "int32/weights_bias_int32.h"
+
+#include "mage_dma_int32.h"
+
 
 /**
  * @brief Configure Mage for the dilated conv1d of layer 0.
  */
 
-void mage_dil_conv1d_layer_0();
+/*
+    INPUT_DIM = 4
+    TIME_LENGTH = 128
+    KERNEL_SIZE = 3
+    DILATION = 1
+    OUTPUT_DIM = 16
+*/
 
-void mage_dil_conv1d_layer_0(){
+void mage_tcn_l0_tile();
+
+void mage_tcn_l0(uint32_t * input_start_addr, uint32_t * outputs_start_addr, int time_length, int kernel_size, int input_dim, int output_dim);
+
+void mage_tcn_l0_tile(){
     //Mage general configuration bits
     uint32_t snt = 0xf;
     uint32_t accMode = 0x20;
@@ -63,6 +80,31 @@ void mage_dil_conv1d_layer_0(){
     mage_set_age_cfg(0x100a006,3,0,0);
 
     mage_set_iv_constraints_reg(0x80,3,0);
+
+}
+
+void mage_l0(uint32_t * input_start_addr, uint32_t * outputs_start_addr, int time_length, int kernel_size, int input_dim, int output_dim){
+
+    /*  
+        Number of weights = 4*3*16=192 which fits in the Mage memory space dedicated to weights
+    */
+    if (dma_int32_trans_weights_from_flash(MAGE_WEIGHTS_START_ADDR, &WEIGHTS[weight_offset], output_dim * input_dim * kernel_size) != FLASH_OK)
+    {return EXIT_FAILURE;
+
+    /* 
+        Number of inputs = 128*4=512 which fits in the Mage memory space dedicated to inputs
+    */
+    dma_int32_trans_inputs(input_start_addr, MAGE_INPUTS_START_ADDR, time_length, input_dim);
+
+    /*
+        Mage Layer 0
+    */
+    mage_tcn_l0();
+
+    /*
+        Number of outputs = 128*16=2048 which fits in the Mage memory space dedicated to outputs
+    */
+    dma_int32_trans_outputs(MAGE_OUTPUTS_START_ADDR, outputs_start_addr, output_dim, time_length);
 
 }
 

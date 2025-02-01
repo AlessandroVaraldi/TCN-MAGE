@@ -42,43 +42,32 @@ void mage_tcn_int32(){
         kernel_size = KERNEL_SIZES[layer];
         dilation    = DILATIONS[l ayer];
 
+        /*
+            Mage memory dedicated to inputs = 2048 32-bit words on 2 banks
+            Mage memory dedicated to outputs = 2048 32-bit words on 2 banks
+            Mage memory dedicated to weights = 2048 32-bit words on 2 banks
+        */
+
         if (layer > 0)
             input_start_addr = outputs_start_addr;
 
-        for (out = 0; out < output_dim; ++out) {
-            if (dma_int32_trans_weights_from_flash(MAGE_WEIGHTS_START_ADDR, &WEIGHTS[weight_offset], input_dim, kernel_size) != FLASH_OK)
-            {
-                return EXIT_FAILURE;
-            }
-            
-            weight_offset += input_dim * kernel_size;
-            
-            dma_int32_trans_inputs(input_start_addr, MAGE_INPUTS_START_ADDR, time_length, input_dim);
-            input_start_addr += input_dim * time_length;
-
-            if (layer == 0) {
-                mage_dil_conv1d_layer_0();
-                dma_int32_trans_outputs(MAGE_OUTPUTS_START_ADDR, outputs_start_addr, output_dim, time_length);
-            } else if (layer == 1) {
-                mage_dil_conv1d_layer_1();
-                dma_int32_trans_outputs(MAGE_OUTPUTS_START_ADDR, outputs_start_addr, output_dim, time_length);
-            } else if (layer == 2) {
-                mage_dil_conv1d_layer_2();
-                dma_int32_trans_outputs(MAGE_OUTPUTS_START_ADDR, outputs_start_addr, output_dim, time_length);
-            } else if (layer == 3) {
-                mage_dil_conv1d_layer_3();
-                dma_int32_trans_outputs(MAGE_OUTPUTS_START_ADDR, outputs_start_addr, output_dim, time_length);
-            } else if (layer == 4) {
-                mage_dil_conv1d_layer_4();
-                dma_int32_trans_outputs(MAGE_OUTPUTS_START_ADDR, outputs_start_addr, output_dim, time_length);
-            } else if (layer == 5) {
-                mage_dil_conv1d_layer_5();
-                dma_int32_trans_outputs(MAGE_OUTPUTS_START_ADDR, outputs_start_addr, output_dim, time_length);
-            }
-
-            outputs_start_addr += output_dim * time_length;
-
+        /*
+            one DMA transfer is enough as the max amount of weights is 128*3=384
+            which fits in the Mage memory space dedicated to weights
+        */
+        if (dma_int32_trans_weights_from_flash(MAGE_WEIGHTS_START_ADDR, &WEIGHTS[weight_offset], input_dim, kernel_size) != FLASH_OK)
+        {
+            return EXIT_FAILURE;
         }
+        
+        // Move the weight offset to the start address of the next output channel weights
+        weight_offset += input_dim * kernel_size;
+        
+        /*
+            Mage memory space dedicated to inputs is 2048 32-bit words on 2 banks
+            The maximum amount of inputs to be loaded is 128*128=16384 which does not fit in this space
+        */
+
 
         printf("    Convolution done\n");
 
