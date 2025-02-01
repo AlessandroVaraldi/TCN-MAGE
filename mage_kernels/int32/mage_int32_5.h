@@ -50,7 +50,7 @@ void mage_l5(uint32_t * input_start_addr, uint32_t * outputs_start_addr, uint32_
             curr_weights_start_addr += weights_tile_size;
 
             // Transfer inputs of tile (o, i)
-            dma_int32_trans_inputs(curr_input_start_addr, MAGE_INPUTS_START_ADDR, time_length, i_tile_size);
+            dma_int32_trans_inputs(curr_input_start_addr, MAGE_INPUTS_START_ADDR, time_length, i_tile_size, n_pad_elements);
             curr_input_start_addr += i_tile_size * time_length;
 
             mage_l2_tile();

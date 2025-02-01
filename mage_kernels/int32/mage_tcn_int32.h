@@ -7,6 +7,8 @@
 
 #include "weights_bias_int32.h"
 #include "tcn_network_params.h"
+
+#include "mage_tcn_parameters.h"
 #include "mage_dma_int32.h"
 #include "mage_int32_0.h"
 #include "mage_int32_1.h"
@@ -15,58 +17,63 @@
 #include "mage_int32_4.h"
 #include "mage_int32_5.h"
 
-#define MAGE_WEIGHTS_START_ADDR MAGE_BANK_0
-#define MAGE_INPUTS_START_ADDR MAGE_BANK_4
-#define MAGE_OUTPUTS_START_ADDR MAGE_BANK_6
-
 
 void mage_tcn_int32();
 
 void mage_tcn_int32(){
 
-    int time_length  = TIME_LENGTH;
-    int layer, out, b, t, i, k;
-    int input_dim, output_dim, kernel_size, dilation;
+    int time_length = TIME_LENGTH;
+    int padded_time_length, input_dim, output_dim, kernel_size, dilation, num_pad_elements;
 
     int weight_offset = 0;
     int bias_offset   = 0;
 
     uint32_t * input_start_addr = REF_INPUT;
     uint32_t * outputs_start_addr;
+    uint32_t * weights_start_addr = &WEIGHTS[0];
 
-    for (layer = 0; layer < NUM_LAYERS; ++layer) {
+    for (int layer = 0; layer < NUM_LAYERS; ++layer) {
         printf("Layer %d...\n", layer);
 
         input_dim   = (layer == 0) ? INPUT_DIM : HIDDEN_DIMS[layer - 1];
         output_dim  = HIDDEN_DIMS[layer];
         kernel_size = KERNEL_SIZES[layer];
-        dilation    = DILATIONS[l ayer];
+        dilation    = DILATIONS[layer];
+        padded_time_length = time_length + (kernel_size - 1) * dilation;
+        num_pad_elements = (kernel_size - 1) * dilation;
 
-        /*
-            Mage memory dedicated to inputs = 2048 32-bit words on 2 banks
-            Mage memory dedicated to outputs = 2048 32-bit words on 2 banks
-            Mage memory dedicated to weights = 2048 32-bit words on 2 banks
-        */
-
-        if (layer > 0)
-            input_start_addr = outputs_start_addr;
-
-        /*
-            one DMA transfer is enough as the max amount of weights is 128*3=384
-            which fits in the Mage memory space dedicated to weights
-        */
-        if (dma_int32_trans_weights_from_flash(MAGE_WEIGHTS_START_ADDR, &WEIGHTS[weight_offset], input_dim, kernel_size) != FLASH_OK)
+        switch(layer)
         {
-            return EXIT_FAILURE;
+            case 0:
+                mage_l0(input_start_addr, outputs_start_addr, weights_start_addr, time_length, kernel_size, input_dim, output_dim, num_pad_elements);
+                break;
+            
+            case 1:
+                mage_l1(input_start_addr, outputs_start_addr, weights_start_addr, time_length, kernel_size, input_dim, output_dim, num_pad_elements);
+                break;
+            
+            case 2:
+                mage_l2(input_start_addr, outputs_start_addr, weights_start_addr, time_length, kernel_size, input_dim, output_dim, num_pad_elements);
+                break;
+            
+            case 3:
+                mage_l3(input_start_addr, outputs_start_addr, weights_start_addr, time_length, kernel_size, input_dim, output_dim, num_pad_elements);
+                break;
+            
+            case 4:
+                mage_l4(input_start_addr, outputs_start_addr, weights_start_addr, time_length, kernel_size, input_dim, output_dim);
+                break;
+            
+            case 5:
+                mage_l5(input_start_addr, outputs_start_addr, weights_start_addr, time_length, kernel_size, input_dim, output_dim);
+                break;
+
+            default:
+                break;
         }
         
-        // Move the weight offset to the start address of the next output channel weights
-        weight_offset += input_dim * kernel_size;
-        
-        /*
-            Mage memory space dedicated to inputs is 2048 32-bit words on 2 banks
-            The maximum amount of inputs to be loaded is 128*128=16384 which does not fit in this space
-        */
+        input_start_addr = outputs_start_addr;
+        weights_start_addr = &WEIGHTS[0];
 
 
         printf("    Convolution done\n");

@@ -24,7 +24,7 @@
 
 void mage_tcn_l0_tile();
 
-void mage_tcn_l0(uint32_t * input_start_addr, uint32_t * outputs_start_addr, int time_length, int kernel_size, int input_dim, int output_dim);
+void mage_l0(uint32_t * input_start_addr, uint32_t * outputs_start_addr, uint32_t * weights_start_addr, int time_length, int kernel_size, int input_dim, int output_dim, int n_pad_elements);
 
 void mage_tcn_l0_tile(){
     //Mage general configuration bits
@@ -83,18 +83,18 @@ void mage_tcn_l0_tile(){
 
 }
 
-void mage_l0(uint32_t * input_start_addr, uint32_t * outputs_start_addr, int time_length, int kernel_size, int input_dim, int output_dim){
+void mage_l0(uint32_t * input_start_addr, uint32_t * outputs_start_addr, uint32_t * weights_start_addr, int time_length, int kernel_size, int input_dim, int output_dim, int n_pad_elements){
 
     /*  
         Number of weights = 4*3*16=192 which fits in the Mage memory space dedicated to weights
     */
-    if (dma_int32_trans_weights_from_flash(MAGE_WEIGHTS_START_ADDR, &WEIGHTS[weight_offset], output_dim * input_dim * kernel_size) != FLASH_OK)
-    {return EXIT_FAILURE;
+    if (dma_int32_trans_weights_from_flash(MAGE_WEIGHTS_START_ADDR, weights_start_addr, output_dim * input_dim * kernel_size) != FLASH_OK)
+    {return EXIT_FAILURE;}
 
     /* 
-        Number of inputs = 128*4=512 which fits in the Mage memory space dedicated to inputs
+        Number of inputs = (128+(3-1)*1)*4=520 which fits in the Mage memory space dedicated to inputs
     */
-    dma_int32_trans_inputs(input_start_addr, MAGE_INPUTS_START_ADDR, time_length, input_dim);
+    dma_int32_trans_inputs(input_start_addr, MAGE_INPUTS_START_ADDR, time_length, input_dim, n_pad_elements);
 
     /*
         Mage Layer 0

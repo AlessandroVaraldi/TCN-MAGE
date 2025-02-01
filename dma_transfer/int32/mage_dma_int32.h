@@ -7,9 +7,11 @@
 
 void dma_int32_trans_inputs(uint32_t *src_ptr, uint32_t *dst_ptr, uint32_t time_length, uint32_t input_dim);
 
-void dma_int32_trans_weights_from_flash(uint32_t *src_ptr, uint32_t *dst_ptr, uint32_t weight_size, uint32_t kernel_size);
+void dma_int32_trans_weights_from_flash(uint32_t *src_ptr, uint32_t *dst_ptr, uint32_t weight_size);
 
-void dma_int32_trans_inputs(uint32_t *src_ptr, uint32_t *dst_ptr, uint32_t time_length, uint32_t input_dim){
+void dma_int32_trans_outputs(uint32_t *src_ptr, uint32_t *dst_ptr, uint32_t time_length, uint32_t output_dim);
+
+void dma_int32_trans_inputs(uint32_t *src_ptr, uint32_t *dst_ptr, uint32_t time_length, uint32_t input_dim, int num_pad_elements){
     //dma_init(NULL);
 
     dma* dma_peri;
@@ -19,17 +21,17 @@ void dma_int32_trans_inputs(uint32_t *src_ptr, uint32_t *dst_ptr, uint32_t time_
 
     // Sign extension
     dma_peri -> SIGN_EXT = 1;
-    // mode to read from flash
+    // mode to read from main memory
     dma_peri -> MODE = DMA_TRANS_MODE_SINGLE;
     // dimensionality of the transfer
     dma_peri -> DIM_CONFIG = DMA_DIM_CONF_2D;
     // DMA interrupt enable
     dma_peri -> INTERRUPT_EN = 1;
-    // SLOT?
+    // no slot
     dma_peri -> SLOT = 0;
-    // Source pointer is main memory
+    // Source pointer is in main memory
     dma_peri -> SRC_PTR = src_ptr;
-    // Destination pointer Mage
+    // Destination pointer is in Mage
     dma_peri -> DST_PTR = dst_ptr;
     // Source data type is WORD
     dma_peri -> SRC_DATA_TYPE = DMA_DATA_TYPE_WORD;
@@ -42,11 +44,12 @@ void dma_int32_trans_inputs(uint32_t *src_ptr, uint32_t *dst_ptr, uint32_t time_
     dma_peri -> DST_PTR_INC_D1 = 1;
     dma_peri -> DST_PTR_INC_D2 = 1;
     // Size of the transfer
-    dma_peri -> SIZE_D1 = time_length*(input_dim/2);
+    dma_peri -> SIZE_D1 = time_length;
+    dma_peri -> SIZE_D2 = input_dim/2;
     
     protected_wait_for_dma_interrupt();
 
-    // Input Transfer for even input channels
+    // Input Transfer for odd input channels
 
     // Sign extension
     dma_peri -> SIGN_EXT = 1;
@@ -56,12 +59,12 @@ void dma_int32_trans_inputs(uint32_t *src_ptr, uint32_t *dst_ptr, uint32_t time_
     dma_peri -> DIM_CONFIG = DMA_DIM_CONF_2D;
     // DMA interrupt enable
     dma_peri -> INTERRUPT_EN = 1;
-    // SLOT?
+    // no slot
     dma_peri -> SLOT = 0;
-    // Source pointer is flash
+    // Source pointer is in main memory
     dma_peri -> SRC_PTR = src_ptr + time_length*(input_dim/2);
-    // Destination pointer Mage
-    dma_peri -> DST_PTR = ;
+    // Destination pointer is in Mage
+    dma_peri -> DST_PTR = dst_ptr + 1024;
     // Source data type is WORD
     dma_peri -> SRC_DATA_TYPE = DMA_DATA_TYPE_WORD;
     // Destination data type is WORD
@@ -73,7 +76,8 @@ void dma_int32_trans_inputs(uint32_t *src_ptr, uint32_t *dst_ptr, uint32_t time_
     dma_peri -> DST_PTR_INC_D1 = 1;
     dma_peri -> DST_PTR_INC_D2 = 1;
     // Size of the transfer
-    dma_peri -> SIZE_D1 = time_length*(input_dim/2);
+    dma_peri -> SIZE_D1 = time_length;
+    dma_peri -> SIZE_D2 = input_dim/2;
 }
 
 // to be modifed
@@ -100,7 +104,7 @@ void dma_int32_trans_weights_from_flash(uint32_t *src_ptr, uint32_t *dst_ptr, ui
     dma_peri -> DIM_CONFIG = DMA_DIM_CONF_1D;
     // DMA interrupt enable
     dma_peri -> INTERRUPT_EN = 1;
-    // SLOT?
+    // SPI
     dma_peri -> SLOT = slot;
     // Source pointer is flash
     dma_peri -> SRC_PTR = (uint8_t*) (src_ptr);
