@@ -321,7 +321,7 @@ data = pd.read_csv(file_path)
 data = DataUtils.check_and_clean_data(data, input_cols, output_col)
 
 # === Sequence Length ===
-config_path = "cfg/config2.json"
+config_path = "cfg/config3.json"
 with open(config_path, 'r') as f:
     config = json.load(f)
 sequence_length = config['sequence_length']

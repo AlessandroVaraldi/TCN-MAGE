@@ -39,6 +39,7 @@ class TCN(nn.Module):
             use_batchnorm = layer_config.get('use_batchnorm', False)
             use_relu = layer_config.get('use_relu', True)
             use_maxpool = layer_config.get('use_maxpool', False)
+            use_avgpool = layer_config.get('use_avgpool', False)
             use_dropout = layer_config.get('use_dropout', False)
             dropout_prob = layer_config.get('dropout_prob', 0.0)
             use_gap = layer_config.get('use_gap', False)
@@ -50,6 +51,8 @@ class TCN(nn.Module):
                 layer.add_module('relu', nn.ReLU())
             if use_maxpool:
                 layer.add_module('maxpool', nn.MaxPool1d(kernel_size=2))
+            if use_avgpool:
+                layer.add_module('avgpool', nn.AvgPool1d(kernel_size=2))
             if use_dropout:
                 layer.add_module('dropout', nn.Dropout(dropout_prob))
             if use_gap:
@@ -66,7 +69,7 @@ class TCN(nn.Module):
     def forward(self, x):
         for layer in self.layers:
             x = layer(x)
-        if x.size(1) > 1:
+        if x.shape[-1] == 1:
             x = x.squeeze(-1)
         return x
     
@@ -80,6 +83,7 @@ class TCN(nn.Module):
                             f"  batchnorm={'yes' if 'batchnorm' in layer._modules['conv']._modules else 'no'}, "
                             f"  relu={'yes' if 'relu' in layer._modules else 'no'}, "
                             f"  maxpool={'yes' if 'maxpool' in layer._modules else 'no'}, "
+                            f"  avgpool={'yes' if 'avgpool' in layer._modules else 'no'}, "
                             f"  dropout={'yes' if 'dropout' in layer._modules else 'no'}, "
                             f"  dropout_prob={layer._modules['dropout'].p if 'dropout' in layer._modules else 0}, "
                             f"  gap={'yes' if 'gap' in layer._modules else 'no'}, "
