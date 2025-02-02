@@ -273,6 +273,7 @@ w25q_error_codes_t fill_buffer(dtype *source, dtype *buffer, int len){
  * - DILATIONS: Array specifying the dilation factor for each layer.
  * - RELU_FLAGS: Array specifying whether to apply ReLU activation for each layer.
  * - MAXPOOL_FLAGS: Array specifying whether to apply MaxPooling for each layer.
+ * - AVGPOOL_FLAGS: Array specifying whether to apply Average Pooling for each layer.
  * - GAP_FLAGS: Array specifying whether to apply Global Average Pooling for each layer.
  * - SOFTMAX_FLAGS: Array specifying whether to apply Softmax normalization for each layer.
  * - WEIGHTS: Array containing the weights for each layer.
