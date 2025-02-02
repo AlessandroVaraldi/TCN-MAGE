@@ -9,12 +9,9 @@
 
 #include "mage_dma_int32.h"
 
-
-/**
- * @brief Configure Mage for the dilated conv1d of layer 0.
- */
-
 /*
+    Parameters for this layer are:
+
     INPUT_DIM = 4
     TIME_LENGTH = 128
     KERNEL_SIZE = 3
@@ -22,11 +19,11 @@
     OUTPUT_DIM = 16
 */
 
-void mage_tcn_l0_tile();
+void mage_l0_tile();
 
 void mage_l0(uint32_t * input_start_addr, uint32_t * outputs_start_addr, uint32_t * weights_start_addr, int time_length, int kernel_size, int input_dim, int output_dim, int n_pad_elements);
 
-void mage_tcn_l0_tile(){
+void mage_l0_tile(){
     //Mage general configuration bits
     uint32_t snt = 0xf;
     uint32_t accMode = 0x20;
@@ -83,6 +80,10 @@ void mage_tcn_l0_tile(){
 
 }
 
+/*
+    In this layer, all inputs, weights and outputs fit in Mage
+    All weights and inputs are transferred to Mage, outputs calculated and then transferred to Memory
+*/
 void mage_l0(uint32_t * input_start_addr, uint32_t * outputs_start_addr, uint32_t * weights_start_addr, int time_length, int kernel_size, int input_dim, int output_dim, int n_pad_elements){
 
     /*  
@@ -99,7 +100,7 @@ void mage_l0(uint32_t * input_start_addr, uint32_t * outputs_start_addr, uint32_
     /*
         Mage Layer 0
     */
-    mage_tcn_l0();
+    mage_l0_tile();
 
     /*
         Number of outputs = 128*16=2048 which fits in the Mage memory space dedicated to outputs
