@@ -301,11 +301,13 @@ class Exporter:
             # Genera vettori per operazioni aggiuntive
             relu_flags = [1 if 'relu' in layer._modules else 0 for layer in model.layers]
             maxpool_flags = [1 if 'maxpool' in layer._modules else 0 for layer in model.layers]
+            avgpool_flags = [1 if 'avgpool' in layer._modules else 0 for layer in model.layers]
             gap_flags = [1 if 'gap' in layer._modules else 0 for layer in model.layers]
             softmax_flags = [1 if 'softmax' in layer._modules else 0 for layer in model.layers]
 
             f.write(f"static const int32_t RELU_FLAGS[] = {{ {', '.join(map(str, relu_flags))} }};\n")
             f.write(f"static const int32_t MAXPOOL_FLAGS[] = {{ {', '.join(map(str, maxpool_flags))} }};\n")
+            f.write(f"static const int32_t AVGPOOL_FLAGS[] = {{ {', '.join(map(str, avgpool_flags))} }};\n")
             f.write(f"static const int32_t GAP_FLAGS[] = {{ {', '.join(map(str, gap_flags))} }};\n")
             f.write(f"static const int32_t SOFTMAX_FLAGS[] = {{ {', '.join(map(str, softmax_flags))} }};\n")
 
