@@ -314,7 +314,7 @@ class Exporter:
             f.write("\n#endif // TCN_NETWORK_PARAMS_H\n")
 
 # --- Main Pipeline ---
-file_path = "../NYC_Weather_2016_2022.csv"
+file_path = "NYC_Weather_2016_2022.csv"
 input_cols = ["cloudcover (%)", "precipitation (mm)", "winddirection_10m (°)", "windspeed_10m (km/h)"]
 output_col = "temperature_2m (°C)"
 
@@ -323,7 +323,7 @@ data = pd.read_csv(file_path)
 data = DataUtils.check_and_clean_data(data, input_cols, output_col)
 
 # === Sequence Length ===
-config_path = "cfg/config3.json"
+config_path = "training/cfg/config3.json"
 with open(config_path, 'r') as f:
     config = json.load(f)
 sequence_length = config['sequence_length']
@@ -343,13 +343,12 @@ test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 # Modello
 input_dim = len(input_cols)
 tcn_model = TCN(input_dim=input_dim, config_path=config_path).to(device)
-#tcn_model = ResidualTCN(input_dim=input_dim, config_path=config_path).to(device)
 
 # Mostra la struttura del modello
 print(tcn_model.describe())
 
 # Check per modello pre-addestrato
-model_path = f'checkpoints/best_{type(tcn_model).__name__}.pth'
+model_path = f'training/checkpoints/best_{type(tcn_model).__name__}.pth'
 
 epochs = 10000
 patience = 1000
@@ -360,23 +359,22 @@ resume_training = False
 def train_and_save_model():
     tcn_model.train()
     trainer = Trainer(tcn_model, device, learning_rate=1e-3)
-    trained_model, _, _, max_values = trainer.train(train_loader, val_loader, epochs=epochs, patience=patience)
+    trained_model, _, _ = trainer.train(train_loader, val_loader, epochs=epochs, patience=patience)
     torch.save(trained_model.state_dict(), model_path)
-    return max_values
-
+    
 if resume_training:
     if os.path.exists(model_path):
         tcn_model.load_state_dict(torch.load(model_path, map_location=device))
-    max_values = train_and_save_model()
+    train_and_save_model()
 elif force_training:
     if os.path.exists(model_path):
         os.remove(model_path)
-    max_values = train_and_save_model()
+    train_and_save_model()
 else:
     if os.path.exists(model_path):
         tcn_model.load_state_dict(torch.load(model_path, map_location=device))
     else:
-        max_values = train_and_save_model()
+        train_and_save_model()
     
 # Testing
 tcn_model.eval()
@@ -417,13 +415,8 @@ with torch.no_grad():
 fixed_point = 12
 scales = [1.0, 2**fixed_point, 2**(fixed_point//2), 2**(fixed_point//4)]
 
-bit_lengths = []
-for value in max_values:
-    bit_lengths.append(2*(math.ceil(math.log2(value)) + 1))
-print(f"Bit lengths: {bit_lengths}")
-
-header_dir = "../static_ie"
-data_dir = "data"
+header_dir = "static_ie"
+data_dir = "training/data"
 # Remove existing files
 if os.path.exists(data_dir):
     os.system(f"rm -r {data_dir}")

@@ -16,6 +16,7 @@ static const int32_t KERNEL_SIZES[] = { 3, 3, 5, 3, 3, 5, 3, 3, 5, 1, 1 };
 static const int32_t DILATIONS[] = { 2, 2, 1, 4, 4, 1, 8, 8, 1, 1, 1 };
 static const int32_t RELU_FLAGS[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0 };
 static const int32_t MAXPOOL_FLAGS[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+static const int32_t AVGPOOL_FLAGS[] = { 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0 };
 static const int32_t GAP_FLAGS[] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0 };
 static const int32_t SOFTMAX_FLAGS[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
 

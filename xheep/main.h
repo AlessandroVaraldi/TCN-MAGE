@@ -31,7 +31,7 @@
 #define PRECISION_INT16   3
 #define PRECISION_INT32   4
 
-#define PRECISION PRECISION_FLOAT32
+#define PRECISION PRECISION_INT32
 
 // === Macros ===
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -43,17 +43,17 @@
     typedef float double_dtype;
 #elif PRECISION == PRECISION_INT8
     #include "int8/weights_bias_int8.h"
-    #define SCALE (int)pow(2, FIXED_POINT >> 2)
+    #define SCALE pow(2, FIXED_POINT >> 2)
     typedef int8_t dtype;
     typedef int16_t double_dtype;
 #elif PRECISION == PRECISION_INT16
     #include "int16/weights_bias_int16.h"
-    #define SCALE (int)pow(2, FIXED_POINT >> 1)
+    #define SCALE pow(2, FIXED_POINT >> 1)
     typedef int16_t dtype;
     typedef int32_t double_dtype;
 #elif PRECISION == PRECISION_INT32
     #include "int32/weights_bias_int32.h"
-    #define SCALE (int)pow(2, FIXED_POINT)
+    #define SCALE pow(2, FIXED_POINT)
     typedef int32_t dtype;
     typedef int64_t double_dtype;
 #else
@@ -134,6 +134,12 @@ w25q_error_codes_t fill_buffer(dtype *source, dtype *buffer, int len);
  * @brief Get the flash address offset from LMA pointer.
  */
 uint32_t heep_get_flash_address_offset(uint32_t* data_address_lma);
+
+/**
+ * @brief Check if a * b overflows int32_t range.
+ */
+int check_overflow(int32_t a, int32_t b);
+
 
 // ========================================================================
 // Function Implementations
@@ -247,8 +253,8 @@ w25q_error_codes_t fill_buffer(dtype *source, dtype *buffer, int len){
  * @return int Returns 0 on success, or EXIT_FAILURE if an error occurs.
  *
  * The function follows these steps:
- * 1. Precompute scaled REF_INPUT values.
- * 2. Initialize the current buffer with scaled input values.
+ * 1. Precompute SCALEd REF_INPUT values.
+ * 2. Initialize the current buffer with SCALEd input values.
  * 3. For each layer in the network:
  *    - Perform convolution with the appropriate weights and biases.
  *    - Dequantize the intermediate buffer.
@@ -273,7 +279,6 @@ w25q_error_codes_t fill_buffer(dtype *source, dtype *buffer, int len){
  * - DILATIONS: Array specifying the dilation factor for each layer.
  * - RELU_FLAGS: Array specifying whether to apply ReLU activation for each layer.
  * - MAXPOOL_FLAGS: Array specifying whether to apply MaxPooling for each layer.
- * - AVGPOOL_FLAGS: Array specifying whether to apply Average Pooling for each layer.
  * - GAP_FLAGS: Array specifying whether to apply Global Average Pooling for each layer.
  * - SOFTMAX_FLAGS: Array specifying whether to apply Softmax normalization for each layer.
  * - WEIGHTS: Array containing the weights for each layer.
@@ -298,17 +303,17 @@ int inference(float (*output)[NUM_CLASSES])
     int weight_offset = 0;
     int bias_offset   = 0;
 
-    // Precompute scaled REF_INPUT values
-    dtype scaled_ref_input[BATCH_SIZE * INPUT_DIM * TIME_LENGTH];
+    // Precompute SCALEd REF_INPUT values
+    dtype SCALEd_ref_input[BATCH_SIZE * INPUT_DIM * TIME_LENGTH];
     for (int i = 0; i < BATCH_SIZE * INPUT_DIM * TIME_LENGTH; ++i) {
-        scaled_ref_input[i] = (dtype) REF_INPUT[i] * SCALE;
+        SCALEd_ref_input[i] = (dtype) REF_INPUT[i] * SCALE;
     }
 
     // Current buffer initialization
     for (b = 0; b < BATCH_SIZE; ++b) {
         for (out = 0; out < MAX_HIDDEN_DIM; ++out) {
             for (t = 0; t < TIME_LENGTH; ++t) {
-                current_buffer[b][out][t] = scaled_ref_input[b * INPUT_DIM * TIME_LENGTH + out * TIME_LENGTH + t];
+                current_buffer[b][out][t] = SCALEd_ref_input[b * INPUT_DIM * TIME_LENGTH + out * TIME_LENGTH + t];
             }
         }
     }
@@ -337,7 +342,7 @@ int inference(float (*output)[NUM_CLASSES])
             for (b = 0; b < BATCH_SIZE; ++b) {
                 for (t = 0; t < time_length; ++t) {
                     double_dtype result = 0;
-                    dtype scaled_result = 0;
+                    dtype SCALEd_result = 0;
                     for (i = 0; i < input_dim; ++i) {
                         for (k = 0; k < kernel_size; ++k) {
                             int index = t - (kernel_size - 1 - k) * dilation;
@@ -346,12 +351,12 @@ int inference(float (*output)[NUM_CLASSES])
                                 dtype weight = buffer_weights[i*kernel_size + k];
 
                                 result = (double_dtype)input_value * (double_dtype)weight;
-                                scaled_result += (dtype)(result / SCALE);
+                                SCALEd_result += (dtype)(result / SCALE);
                             }
                         }
                     }
-                    scaled_result += buffer_bias[0];
-                    next_buffer[b][out][t] = scaled_result;
+                    SCALEd_result += buffer_bias[0];
+                    next_buffer[b][out][t] = SCALEd_result;
                 }
             }
         }
@@ -385,20 +390,6 @@ int inference(float (*output)[NUM_CLASSES])
                 }
             }
             printf("    MaxPool applied\n");
-        }
-
-        if (AVGPOOL_FLAGS[layer]) {
-            time_length = time_length / 2;
-            for (b = 0; b < BATCH_SIZE; ++b) {
-                for (out = 0; out < output_dim; ++out) {
-                    for (t = 0; t < time_length; ++t) {
-                        float a_ = dequantized_buffer[b][out][2*t];
-                        float b_ = dequantized_buffer[b][out][2*t+1];
-                        dequantized_buffer[b][out][t] = (a_ + b_) / 2;
-                    }
-                }
-            }
-            printf("    AvgPool applied\n");
         }
 
         if (GAP_FLAGS[layer]) {
