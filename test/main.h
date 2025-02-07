@@ -14,10 +14,6 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "x-heep.h"
-#include "w25q128jw.h"
-#include "core_v_mini_mcu.h"
-
 // === Network Parameters ===
 #include "float32/input_output_float32_2.h"
 #include "tcn_network_params.h"
@@ -31,7 +27,7 @@
 #define PRECISION_INT16   3
 #define PRECISION_INT32   4
 
-#define PRECISION PRECISION_INT32
+#define PRECISION PRECISION_FLOAT32
 
 // === Macros ===
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -125,22 +121,6 @@ static void printFloat(float number, int decimalPlaces);
  */
 static void printIntegerPart(float x);
 
-/**
- * @brief Fill a buffer in SRAM by reading from SPI flash (standard read).
- */
-w25q_error_codes_t fill_buffer(dtype *source, dtype *buffer, int len);
-
-/**
- * @brief Get the flash address offset from LMA pointer.
- */
-uint32_t heep_get_flash_address_offset(uint32_t* data_address_lma);
-
-/**
- * @brief Check if a * b overflows int32_t range.
- */
-int check_overflow(int32_t a, int32_t b);
-
-
 // ========================================================================
 // Function Implementations
 // ========================================================================
@@ -230,19 +210,6 @@ static void printFloat(float number, int decimalPlaces) {
 }
 
 /**
- * @brief Fill a buffer in SRAM by reading from SPI flash.
- */
-w25q_error_codes_t fill_buffer(dtype *source, dtype *buffer, int len){
-    uint32_t source_flash = heep_get_flash_address_offset((uint32_t*)source);
-    w25q_error_codes_t status = w25q128jw_read_standard(
-        source_flash,
-        buffer,
-        (uint32_t) len * sizeof(dtype)
-    );
-    return status;
-}
-
-/**
  * @brief Perform inference on the input data and produce output probabilities.
  *
  * This function performs a series of convolutional, activation, pooling, and normalization
@@ -327,15 +294,15 @@ int inference(float (*output)[NUM_CLASSES])
         dilation    = DILATIONS[layer];
 
         for (out = 0; out < output_dim; ++out) {
-            if (fill_buffer(&WEIGHTS[weight_offset], buffer_weights, input_dim * kernel_size) != FLASH_OK)
-            {
-                return EXIT_FAILURE;
+            for (i = 0; i < input_dim; ++i) {
+                for (k = 0; k < kernel_size; ++k) {
+                    buffer_weights[i*kernel_size + k] = WEIGHTS[weight_offset + i*kernel_size + k];
+                }
             }
             weight_offset += input_dim * kernel_size;
 
-            if (fill_buffer(&BIASES[bias_offset], buffer_bias, 1) != FLASH_OK)
-            {
-                return EXIT_FAILURE;
+            for (i = 0; i < SIZE_BIAS; ++i) {
+                buffer_bias[i] = BIASES[bias_offset + i];
             }
             bias_offset += 1;
 
