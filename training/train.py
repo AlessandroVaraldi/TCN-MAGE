@@ -151,9 +151,17 @@ class Exporter:
             for layer_idx, layer in enumerate(model.layers):
                 causal_conv = layer[0]  # Accede al primo modulo (CausalConv1d) in nn.Sequential
                 fused_weight = causal_conv.conv.weight.data.cpu().numpy()
+                
+                # Riordina i canali di input: per ogni output channel,
+                # metti prima tutti i canali pari, poi quelli dispari
+                num_in_channels = fused_weight.shape[1]
+                even_idx = np.arange(0, num_in_channels, 2)
+                odd_idx = np.arange(1, num_in_channels, 2)
+                reordered_weight = np.concatenate([fused_weight[:, even_idx, :], fused_weight[:, odd_idx, :]], axis=1)
+                
                 fused_bias = causal_conv.conv.bias.data.cpu().numpy()
 
-                quantized_weights = Exporter.quantize_data(fused_weight, dtype, scale)
+                quantized_weights = Exporter.quantize_data(reordered_weight, dtype, scale)
                 quantized_biases = Exporter.quantize_data(fused_bias, dtype, scale)
 
                 # Salva i pesi e bias separati per ogni layer
@@ -187,7 +195,7 @@ class Exporter:
                     'int8': 'int8_t'
                 }[dtype_name]
                 k = 0
-                f.write(f"static const {c_type} WEIGHTS[] = {{\n")
+                f.write(f"static const {c_type} __attribute__((section(\".xheep_data_flash_only\"))) WEIGHTS[] = {{\n")
                 ("\n    ")
                 for i, value in enumerate(concatenated_weights):
                     if i % 8 == 0 and i > 0:
@@ -197,7 +205,7 @@ class Exporter:
                         f.write(", ")
                 f.write("\n};\n\n")
 
-                f.write(f"static const {c_type} BIASES[] = {{\n")
+                f.write(f"static const {c_type} __attribute__((section(\".xheep_data_flash_only\"))) BIASES[] = {{\n")
                 for i, value in enumerate(concatenated_biases):
                     if i % 8 == 0 and i > 0:
                         f.write("\n    ")
@@ -224,9 +232,16 @@ class Exporter:
             dtype_folder = os.path.join(data_dir, dtype_name)
             os.makedirs(dtype_folder, exist_ok=True)
             scale = scales[dtypes.index((dtype, dtype_name))]
+            
+            # Riordina gli input: per ogni time step, metti i canali pari prima e quelli dispari dopo.
+            # Assumiamo input_data di forma (batch, channels, time_steps)
+            num_channels = input_data.shape[1]
+            even_idx = np.arange(0, num_channels, 2)
+            odd_idx = np.arange(1, num_channels, 2)
+            reordered_input_data = np.concatenate([input_data[:, even_idx, :], input_data[:, odd_idx, :]], axis=1)
 
             # Quantizzazione
-            quantized_input = Exporter.quantize_data(input_data, dtype, scale)
+            quantized_input = Exporter.quantize_data(reordered_input_data, dtype, scale)
             quantized_output = Exporter.quantize_data(output_data, dtype, scale)
 
             # Salvataggio in formato .npy per batch
@@ -351,7 +366,7 @@ model_path = f'training/checkpoints/best_{type(tcn_model).__name__}.pth'
 epochs = 10000
 patience = 1000
 
-force_training = True
+force_training = False
 resume_training = False
 
 def train_and_save_model():
@@ -413,12 +428,13 @@ with torch.no_grad():
 fixed_point = 12
 scales = [1.0, 2**fixed_point, 2**(fixed_point//2), 2**(fixed_point//4)]
 
-header_dir = "static_ie"
-data_dir = "training/data"
+header_dir = "even_odd"
+data_dir = "training/even_odd"
 # Remove existing files
 if os.path.exists(data_dir):
     os.system(f"rm -r {data_dir}")
 os.makedirs(data_dir, exist_ok=True)
+os.makedirs(header_dir, exist_ok=True)
 Exporter.export_weights_and_biases(best_tcn, header_dir, data_dir, scales)
 
 torch_input = torch.randn(batch, input_dim, sequence_length, dtype=torch.float32)
