@@ -1,5 +1,5 @@
 {
-    "sequence_length": 300,
+    "sequence_length": 100,
     "layers": [
         {
             "layer_type": "conv1d",

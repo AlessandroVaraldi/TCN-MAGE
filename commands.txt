@@ -1,0 +1,8 @@
+cd Documents/x-heep/
+conda activate core-v-mini-mcu
+make mcu-gen
+make vivado-fpga FPGA_BOARD=pynq-z2 FUSESOC_PARAM="--COREV_PULP=1 --FPU=1"
+make vivado-fpga-pgm FPGA_BOARD=pynq-z2
+make app PROJECT=tcn TARGET=pynq-z2 LINKER=flash_load COMPILER_PREFIX=riscv32-corev- ARCH=rv32imcf
+make flash-prog 
+picocom -b 9600 -r -l --imap lfcrlf /dev/ttyUSB3

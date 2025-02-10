@@ -174,9 +174,7 @@ class Exporter:
             concatenated_biases = np.concatenate(all_biases)
 
             # Salvataggio in formato header
-            header_path = os.path.join(header_dir, dtype_name)
-            os.makedirs(header_path, exist_ok=True)
-            header_path = os.path.join(header_path, f"weights_bias_{dtype_name}.h")
+            header_path = os.path.join(header_dir, f"weights_bias_{dtype_name}.h")
             with open(header_path, "w") as f:
                 f.write(f"#ifndef WEIGHTS_BIAS_{dtype_name.upper()}_H\n")
                 f.write(f"#define WEIGHTS_BIAS_{dtype_name.upper()}_H\n\n")
@@ -211,7 +209,7 @@ class Exporter:
                 f.write(f"#endif // WEIGHTS_BIAS_{dtype_name.upper()}_H\n")
                 
     @staticmethod
-    def export_inputs_outputs(input_data, output_data, header_dir, data_dir, scales, batch=1):
+    def export_inputs_outputs(input_data, output_data, header_dir, data_dir, scales):
         """
         Esporta input e output in formato .h, .npy e .bin per tutte le scale.
 
@@ -240,44 +238,44 @@ class Exporter:
                 f.write(quantized_input.tobytes())
             with open(os.path.join(dtype_folder, f"output_{batch}.bin"), "wb") as f:
                 f.write(quantized_output.tobytes())
+                
+        dtype, dtype_name = dtypes[0]
 
-            # Salvataggio in formato header
-            header_path = os.path.join(header_dir, dtype_name)
-            os.makedirs(header_path, exist_ok=True)
-            header_path = os.path.join(header_path, f"input_output_{dtype_name}_{batch}.h")
-            with open(header_path, "w") as f:
-                f.write(f"#ifndef INPUT_OUTPUT_{dtype_name.upper()}_H\n")
-                f.write(f"#define INPUT_OUTPUT_{dtype_name.upper()}_H\n\n")
-                f.write("#include <stdint.h>\n\n")
+        # Salvataggio in formato header
+        header_path = os.path.join(header_dir, f"input_output.h")
+        with open(header_path, "w") as f:
+            f.write(f"#ifndef INPUT_OUTPUT_{dtype_name.upper()}_H\n")
+            f.write(f"#define INPUT_OUTPUT_{dtype_name.upper()}_H\n\n")
+            f.write("#include <stdint.h>\n\n")
 
-                c_type = {
-                    'float32': 'float',
-                    'int32': 'int32_t',
-                    'int16': 'int16_t',
-                    'int8': 'int8_t'
-                }[dtype_name]
+            c_type = {
+                'float32': 'float',
+                'int32': 'int32_t',
+                'int16': 'int16_t',
+                'int8': 'int8_t'
+            }[dtype_name]
 
-                # Esportazione degli input
-                f.write(f"static const {c_type} REF_INPUT[] = {{\n")
-                for i, value in enumerate(quantized_input.flatten()):
-                    if i % 8 == 0 and i > 0:
-                        f.write("\n    ")
-                    f.write(f"{value}")
-                    if i < len(quantized_input.flatten()) - 1:
-                        f.write(", ")
-                f.write("\n};\n\n")
+            # Esportazione degli input
+            f.write(f"static const {c_type} REF_INPUT[] = {{\n")
+            for i, value in enumerate(input_data.flatten()):
+                if i % 8 == 0 and i > 0:
+                    f.write("\n    ")
+                f.write(f"{value}")
+                if i < len(input_data.flatten()) - 1:
+                    f.write(", ")
+            f.write("\n};\n\n")
 
-                # Esportazione degli output
-                f.write(f"static const {c_type} REF_OUTPUT[] = {{\n")
-                for i, value in enumerate(quantized_output.flatten()):
-                    if i % 8 == 0 and i > 0:
-                        f.write("\n    ")
-                    f.write(f"{value}")
-                    if i < len(quantized_output.flatten()) - 1:
-                        f.write(", ")
-                f.write("\n};\n\n")
+            # Esportazione degli output
+            f.write(f"static const {c_type} REF_OUTPUT[] = {{\n")
+            for i, value in enumerate(output_data.flatten()):
+                if i % 8 == 0 and i > 0:
+                    f.write("\n    ")
+                f.write(f"{value}")
+                if i < len(output_data.flatten()) - 1:
+                    f.write(", ")
+            f.write("\n};\n\n")
 
-                f.write(f"#endif // INPUT_OUTPUT_{dtype_name.upper()}_H\n")
+            f.write(f"#endif // INPUT_OUTPUT_{dtype_name.upper()}_H\n")
 
     @staticmethod
     def export_network_parameters(header_path, model, input_dim, hidden_dims, kernel_sizes, dilations, sequence_length, fixed_point):
@@ -422,9 +420,10 @@ if os.path.exists(data_dir):
     os.system(f"rm -r {data_dir}")
 os.makedirs(data_dir, exist_ok=True)
 Exporter.export_weights_and_biases(best_tcn, header_dir, data_dir, scales)
-for i in range(10):
-    torch_input = torch.randn(batch, input_dim, sequence_length, dtype=torch.float32)
-    Exporter.export_inputs_outputs(torch_input.cpu().numpy(), py_output, header_dir, data_dir, scales, i)
+
+torch_input = torch.randn(batch, input_dim, sequence_length, dtype=torch.float32)
+Exporter.export_inputs_outputs(torch_input.cpu().numpy(), py_output, header_dir, data_dir, scales)
+
 Exporter.export_network_parameters(
     header_path=os.path.join(header_dir, "tcn_network_params.h"),
     model=best_tcn,

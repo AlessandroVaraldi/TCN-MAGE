@@ -9,13 +9,21 @@
 #ifndef MAIN_H_
 #define MAIN_H_
 
+#define XHEEP 0
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
 
+#if XHEEP
+#include "x-heep.h"
+#include "w25q128jw.h"
+#include "dma_sdk.h"
+#endif
+
 // === Network Parameters ===
-#include "float32/input_output_float32_2.h"
+#include "input_output.h"
 #include "tcn_network_params.h"
 
 // Per semplicità, rimane BATCH_SIZE=1
@@ -33,22 +41,22 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #if PRECISION == PRECISION_FLOAT32
-    #include "float32/weights_bias_float32.h"
+    #include "weights_bias_float32.h"
     #define SCALE 1
     typedef float dtype;
     typedef float double_dtype;
 #elif PRECISION == PRECISION_INT8
-    #include "int8/weights_bias_int8.h"
+    #include "weights_bias_int8.h"
     #define SCALE pow(2, FIXED_POINT >> 2)
     typedef int8_t dtype;
     typedef int16_t double_dtype;
 #elif PRECISION == PRECISION_INT16
-    #include "int16/weights_bias_int16.h"
+    #include "weights_bias_int16.h"
     #define SCALE pow(2, FIXED_POINT >> 1)
     typedef int16_t dtype;
     typedef int32_t double_dtype;
 #elif PRECISION == PRECISION_INT32
-    #include "int32/weights_bias_int32.h"
+    #include "weights_bias_int32.h"
     #define SCALE pow(2, FIXED_POINT)
     typedef int32_t dtype;
     typedef int64_t double_dtype;
@@ -120,6 +128,18 @@ static void printFloat(float number, int decimalPlaces);
  * @brief Print the integer part of a float (recursive).
  */
 static void printIntegerPart(float x);
+
+#if XHEEP
+/**
+ * @brief Fill a buffer in SRAM by reading from SPI flash (standard read).
+ */
+w25q_error_codes_t fill_buffer(dtype *source, dtype *buffer, int len);
+
+/**
+ * @brief Get the flash address offset from LMA pointer.
+ */
+uint32_t heep_get_flash_address_offset(uint32_t* data_address_lma);
+#endif
 
 // ========================================================================
 // Function Implementations
@@ -209,6 +229,21 @@ static void printFloat(float number, int decimalPlaces) {
     }
 }
 
+#if XHEEP
+/**
+ * @brief Fill a buffer in SRAM by reading from SPI flash.
+ */
+w25q_error_codes_t fill_buffer(dtype *source, dtype *buffer, int len){
+    uint32_t source_flash = heep_get_flash_address_offset((uint32_t*)source);
+    w25q_error_codes_t status = w25q128jw_read_standard(
+        source_flash,
+        buffer,
+        (uint32_t) len * sizeof(dtype)
+    );
+    return status;
+}
+#endif
+
 /**
  * @brief Perform inference on the input data and produce output probabilities.
  *
@@ -271,16 +306,16 @@ int inference(float (*output)[NUM_CLASSES])
     int bias_offset   = 0;
 
     // Precompute SCALEd REF_INPUT values
-    dtype SCALEd_ref_input[BATCH_SIZE * INPUT_DIM * TIME_LENGTH];
+    dtype scaled_ref_input[BATCH_SIZE * INPUT_DIM * TIME_LENGTH];
     for (int i = 0; i < BATCH_SIZE * INPUT_DIM * TIME_LENGTH; ++i) {
-        SCALEd_ref_input[i] = (dtype) REF_INPUT[i] * SCALE;
+        scaled_ref_input[i] = (dtype) REF_INPUT[i] * SCALE;
     }
 
     // Current buffer initialization
     for (b = 0; b < BATCH_SIZE; ++b) {
         for (out = 0; out < INPUT_DIM; ++out) {
             for (t = 0; t < TIME_LENGTH; ++t) {
-                current_buffer[b][out][t] = SCALEd_ref_input[b * INPUT_DIM * TIME_LENGTH + out * TIME_LENGTH + t];
+                current_buffer[b][out][t] = scaled_ref_input[b * INPUT_DIM * TIME_LENGTH + out * TIME_LENGTH + t];
             }
         }
     }
@@ -294,22 +329,36 @@ int inference(float (*output)[NUM_CLASSES])
         dilation    = DILATIONS[layer];
 
         for (out = 0; out < output_dim; ++out) {
+            #if XHEEP
+            if (fill_buffer(&WEIGHTS[weight_offset], buffer_weights, input_dim * kernel_size) != FLASH_OK)
+            {
+                return EXIT_FAILURE;
+            }
+            #else
             for (i = 0; i < input_dim; ++i) {
                 for (k = 0; k < kernel_size; ++k) {
                     buffer_weights[i*kernel_size + k] = WEIGHTS[weight_offset + i*kernel_size + k];
                 }
             }
+            #endif
             weight_offset += input_dim * kernel_size;
 
+            #if XHEEP
+            if (fill_buffer(&BIASES[bias_offset], buffer_bias, 1) != FLASH_OK)
+            {
+                return EXIT_FAILURE;
+            }
+            #else
             for (i = 0; i < SIZE_BIAS; ++i) {
                 buffer_bias[i] = BIASES[bias_offset + i];
             }
+            #endif
             bias_offset += 1;
 
             for (b = 0; b < BATCH_SIZE; ++b) {
                 for (t = 0; t < time_length; ++t) {
                     double_dtype result = 0;
-                    dtype SCALEd_result = 0;
+                    dtype scaled_result = 0;
                     for (i = 0; i < input_dim; ++i) {
                         for (k = 0; k < kernel_size; ++k) {
                             int index = t - (kernel_size - 1 - k) * dilation;
@@ -318,12 +367,12 @@ int inference(float (*output)[NUM_CLASSES])
                                 dtype weight = buffer_weights[i*kernel_size + k];
 
                                 result = (double_dtype)input_value * (double_dtype)weight;
-                                SCALEd_result += (dtype)(result / SCALE);
+                                scaled_result += (dtype)(result / SCALE);
                             }
                         }
                     }
-                    SCALEd_result += buffer_bias[0];
-                    next_buffer[b][out][t] = SCALEd_result;
+                    scaled_result += buffer_bias[0];
+                    next_buffer[b][out][t] = scaled_result;
                 }
             }
         }
@@ -400,7 +449,6 @@ int inference(float (*output)[NUM_CLASSES])
             output[b_][out_] = (float)current_buffer[b_][out_][0] / SCALE;
         }
     }
-
     return 0;
 }
 
