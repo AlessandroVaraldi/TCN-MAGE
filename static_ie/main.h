@@ -408,6 +408,20 @@ int inference(float (*output)[NUM_CLASSES])
             printf("    MaxPool applied\n");
         }
 
+        if (AVGPOOL_FLAGS[layer]) {
+            time_length = time_length / 2;
+            for (b = 0; b < BATCH_SIZE; ++b) {
+                for (out = 0; out < output_dim; ++out) {
+                    for (t = 0; t < time_length; ++t) {
+                        float a_ = dequantized_buffer[b][out][2*t];
+                        float b_ = dequantized_buffer[b][out][2*t+1];
+                        dequantized_buffer[b][out][t] = (a_ + b_) / 2;
+                    }
+                }
+            }
+            printf("    AvgPool applied\n");
+        }
+
         if (GAP_FLAGS[layer]) {
             float sum;
             for (b = 0; b < BATCH_SIZE; ++b) {
